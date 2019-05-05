@@ -21,6 +21,7 @@ module Zephyrnot.Board exposing
     )
 
 import Array exposing (Array)
+import Html exposing (Html)
 import Set exposing (Set)
 import Svg exposing (Svg, foreignObject, g, line, rect, svg)
 import Svg.Attributes
@@ -155,6 +156,78 @@ winner board =
             NoWinner
 
 
-render : Int -> msg -> Board -> Svg msg
-render size msg board =
-    Svg.text "TODO"
+tos : Int -> String
+tos x =
+    String.fromInt x
+
+
+overSixPtFive : Int -> Int
+overSixPtFive x =
+    2 * x // 13
+
+
+lineWidth : String
+lineWidth =
+    "4"
+
+
+render : Int -> (( Int, Int ) -> msg) -> Board -> Html msg
+render size tagger board =
+    let
+        sizeS =
+            tos size
+
+        delta =
+            overSixPtFive size
+    in
+    svg
+        [ width sizeS
+        , height sizeS
+        ]
+    <|
+        List.concat
+            [ drawRows delta
+            , drawCols delta
+            , drawBoard delta tagger board
+            ]
+
+
+drawRows : Int -> List (Svg msg)
+drawRows delta =
+    List.map (drawRow delta) [ 1, 2, 3, 4, 5, 6 ]
+
+
+drawRow : Int -> Int -> Svg msg
+drawRow delta idx =
+    Svg.line
+        [ x1 <| tos delta
+        , y1 <| tos (delta * idx)
+        , x2 <| tos (delta * 6)
+        , y2 <| tos (delta * idx)
+        , strokeWidth lineWidth
+        , stroke "black"
+        ]
+        []
+
+
+drawCols : Int -> List (Svg msg)
+drawCols delta =
+    List.map (drawCol delta) [ 1, 2, 3, 4, 5, 6 ]
+
+
+drawCol : Int -> Int -> Svg msg
+drawCol delta idx =
+    Svg.line
+        [ x1 <| tos (delta * idx)
+        , y1 <| tos delta
+        , x2 <| tos (delta * idx)
+        , y2 <| tos (delta * 6)
+        , strokeWidth lineWidth
+        , stroke "black"
+        ]
+        []
+
+
+drawBoard : Int -> (( Int, Int ) -> msg) -> Board -> List (Svg msg)
+drawBoard delta tagger board =
+    []

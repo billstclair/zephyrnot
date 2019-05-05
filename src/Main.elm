@@ -13,6 +13,7 @@
 module Main exposing (main)
 
 import Browser exposing (Document, UrlRequest(..))
+import Browser.Dom as Dom exposing (Viewport)
 import Browser.Events as Events
 import Browser.Navigation as Navigation exposing (Key)
 import Cmd.Extra exposing (withCmd, withCmds, withNoCmd)
@@ -95,16 +96,21 @@ import Svg.Attributes
         )
 import Svg.Button as SB exposing (Button, Content(..))
 import Svg.Events
+import Task
 import Url exposing (Url)
+import Zephyrnot.Board as Board exposing (Board, Winner(..))
 
 
 type alias Model =
     { key : Key
+    , windowSize : ( Int, Int )
+    , board : Board
     }
 
 
 type Msg
     = Noop
+    | WindowResize Int Int
     | HandleUrlRequest UrlRequest
     | HandleUrlChange Url
 
@@ -114,7 +120,7 @@ main =
         { init = init
         , view = view
         , update = update
-        , subscriptions = \_ -> Sub.none
+        , subscriptions = subscriptions
         , onUrlRequest = HandleUrlRequest
         , onUrlChange = HandleUrlChange
         }
@@ -122,7 +128,21 @@ main =
 
 init : Value -> Url -> Key -> ( Model, Cmd Msg )
 init flags url key =
-    { key = key } |> withNoCmd
+    { key = key
+    , windowSize = ( 1024, 768 )
+    , board = Board.empty
+    }
+        |> withCmds
+            [ Task.perform getViewport Dom.getViewport ]
+
+
+getViewport : Viewport -> Msg
+getViewport viewport =
+    let
+        vp =
+            viewport.viewport
+    in
+    WindowResize (round vp.width) (round vp.height)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -130,6 +150,10 @@ update msg model =
     case msg of
         Noop ->
             model |> withNoCmd
+
+        WindowResize w h ->
+            { model | windowSize = ( w, h ) }
+                |> withNoCmd
 
         HandleUrlRequest request ->
             ( model
@@ -146,9 +170,25 @@ update msg model =
             model |> withNoCmd
 
 
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Sub.batch
+        [ Events.onResize WindowResize
+        ]
+
+
 br : Html Msg
 br =
     Html.br [] []
+
+
+boardSize : Model -> Int
+boardSize model =
+    let
+        ( w, h ) =
+            model.windowSize
+    in
+    60 * max w h // 100
 
 
 view : Model -> Document Msg
@@ -165,7 +205,10 @@ view model =
             , p [ style "margin" "0" ]
                 [ text "Invented by Chris St. Clair" ]
             , p []
-                [ text "Board goes here" ]
+                [ Board.render (boardSize model)
+                    (\_ -> Noop)
+                    model.board
+                ]
             , p []
                 [ a
                     [ href "Zephyrnot.pdf"
