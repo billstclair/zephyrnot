@@ -146,6 +146,11 @@ update msg model =
             model |> withNoCmd
 
 
+br : Html Msg
+br =
+    Html.br [] []
+
+
 view : Model -> Document Msg
 view model =
     { title = "Zephyrnot"
@@ -161,6 +166,16 @@ view model =
                 [ text "Invented by Chris St. Clair" ]
             , p []
                 [ text "Board goes here" ]
+            , p []
+                [ a
+                    [ href "Zephyrnot.pdf"
+                    , target "_blank"
+                    ]
+                    [ text "Instructions" ]
+                , br
+                , a [ href "https://github.com/billstclair/zephyrnot/" ]
+                    [ text "GitHub" ]
+                ]
             ]
         ]
     }
