@@ -173,7 +173,10 @@ view model =
                     ]
                     [ text "Instructions" ]
                 , br
-                , a [ href "https://github.com/billstclair/zephyrnot/" ]
+                , a
+                    [ href "https://github.com/billstclair/zephyrnot/"
+                    , target "_blank"
+                    ]
                     [ text "GitHub" ]
                 ]
             ]
