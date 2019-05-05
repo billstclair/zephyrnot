@@ -2,7 +2,7 @@
 
 Zephyrnot is a two-player board game invented by Chris St. Clair.
 
-Instructions are in [Zephyrnot.pdf](Zephyrnot.pdf).
+Instructions are in [Zephyrnot.pdf](site/Zephyrnot.pdf).
 
 ## Elm Reactor
 
