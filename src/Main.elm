@@ -133,6 +133,7 @@ init flags url key =
     , board =
         Board.empty
             -- Temporary
+            |> Board.set 0 3
             |> Board.set 1 1
             |> Board.set 1 2
             |> Board.set 2 2

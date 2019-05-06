@@ -250,26 +250,44 @@ drawCol delta tagger board idx =
         ]
 
 
+connectWidth : Int -> Int
+connectWidth delta =
+    delta // 8
+
+
 drawVertex : Int -> Int -> (( Int, Int ) -> msg) -> Board -> Int -> List (Svg msg)
 drawVertex delta colidx tagger board rowidx =
     let
         ( xc, yc ) =
             ( delta * (colidx + 1), delta * rowidx + delta // 2 )
+
+        setp =
+            get rowidx colidx board
     in
-    if not <| get rowidx colidx board then
-        [ Svg.circle
+    [ [ Svg.circle
             [ cx <| tos xc
             , cy <| tos yc
             , r <| tos (delta // 6)
             , strokeWidth <| tos lineWidthO2
             , stroke "black"
-            , fill "white"
+            , fill
+                (if setp then
+                    "black"
+
+                 else
+                    "white"
+                )
             ]
             []
-        ]
+      ]
+    , if not setp then
+        []
 
-    else
+      else
         let
+            lw =
+                connectWidth delta
+
             leftp =
                 get rowidx (colidx - 1) board
 
@@ -289,26 +307,25 @@ drawVertex delta colidx tagger board rowidx =
             let
                 left =
                     if leftp then
-                        xc - delta
+                        xc - delta // 2
 
                     else
-                        xc - delta // 6
+                        xc
 
                 right =
                     if rightp then
-                        xc + delta
+                        xc + delta // 2
 
                     else
-                        xc + delta // 6
+                        xc
             in
             [ Svg.rect
                 [ x <| tos left
-                , y <| tos (yc - delta // 6)
+                , y <| tos (yc - lw // 2)
                 , width <| tos (right - left)
-                , height <| tos (delta // 3)
+                , height <| tos lw
                 , stroke "black"
                 , fill "black"
-                , rx <| tos (delta // 6)
                 ]
                 []
             ]
@@ -319,28 +336,29 @@ drawVertex delta colidx tagger board rowidx =
             let
                 top =
                     if upp then
-                        yc - delta
+                        yc - delta // 2
 
                     else
-                        yc - delta // 6
+                        yc
 
                 bottom =
                     if downp then
-                        yc + delta
+                        yc + delta // 2
 
                     else
-                        yc + delta // 6
+                        yc
             in
             [ Svg.rect
-                [ x <| tos (xc - delta // 6)
+                [ x <| tos (xc - lw // 2)
                 , y <| tos top
-                , width <| tos (delta // 3)
+                , width <| tos lw
                 , height <| tos (bottom - top)
                 , stroke "black"
                 , fill "black"
-                , rx <| tos (delta // 6)
                 ]
                 []
             ]
         ]
             |> List.concat
+    ]
+        |> List.concat
