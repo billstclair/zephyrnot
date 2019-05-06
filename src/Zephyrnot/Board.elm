@@ -21,6 +21,7 @@ module Zephyrnot.Board exposing
     )
 
 import Array exposing (Array)
+import Dict exposing (Dict)
 import Html exposing (Html)
 import Set exposing (Set)
 import Svg exposing (Svg, foreignObject, g, line, rect, svg)
@@ -29,6 +30,7 @@ import Svg.Attributes
         ( cx
         , cy
         , fill
+        , fillOpacity
         , fontSize
         , height
         , r
@@ -36,6 +38,7 @@ import Svg.Attributes
         , stroke
         , strokeDasharray
         , strokeWidth
+        , style
         , textAnchor
         , transform
         , width
@@ -47,6 +50,7 @@ import Svg.Attributes
         , y1
         , y2
         )
+import Svg.Events as Events
 
 
 type alias Board =
@@ -175,11 +179,6 @@ lineWidth =
     lineWidthO2 * 2
 
 
-overSixPtFive : Int -> Int
-overSixPtFive x =
-    2 * x // 13
-
-
 render : Int -> (( Int, Int ) -> msg) -> Board -> Html msg
 render size tagger board =
     let
@@ -187,7 +186,7 @@ render size tagger board =
             tos size
 
         delta =
-            overSixPtFive (size - lineWidth)
+            (size - lineWidth) // 6
     in
     svg
         [ width sizeS
@@ -203,23 +202,47 @@ render size tagger board =
 drawRows : Int -> List (Svg msg)
 drawRows delta =
     List.map (drawRow delta) [ 0, 1, 2, 3, 4, 5 ]
+        |> List.concat
 
 
-drawRow : Int -> Int -> Svg msg
+fontSize : Int -> Int
+fontSize delta =
+    delta // 4
+
+
+fontStyle : Int -> String
+fontStyle fsize =
+    "font-weight: bold; font-size: " ++ tos fsize
+
+
+drawRow : Int -> Int -> List (Svg msg)
 drawRow delta idx =
     let
-        y =
-            tos (delta * idx + delta // 2)
+        yc =
+            delta * idx + delta // 2
+
+        ycs =
+            tos yc
+
+        fsize =
+            fontSize delta
     in
-    Svg.line
-        [ x1 <| tos delta
-        , y1 y
-        , x2 <| tos (delta * 6)
-        , y2 y
+    [ Svg.line
+        [ x1 <| tos (delta // 2)
+        , y1 ycs
+        , x2 <| tos (delta * 5 + delta // 2)
+        , y2 ycs
         , strokeWidth <| tos lineWidth
         , stroke "black"
         ]
         []
+    , Svg.text_
+        [ x "0"
+        , y <| tos (yc - 3 + fsize // 2)
+        , style <| fontStyle fsize
+        ]
+        [ Svg.text <| rowToString idx ]
+    ]
 
 
 drawCols : Int -> (( Int, Int ) -> msg) -> Board -> List (Svg msg)
@@ -231,19 +254,32 @@ drawCols delta tagger board =
 drawCol : Int -> (( Int, Int ) -> msg) -> Board -> Int -> List (Svg msg)
 drawCol delta tagger board idx =
     let
-        x =
-            tos (delta * (idx + 1))
+        xc =
+            delta * idx + delta // 2
+
+        xcs =
+            tos xc
+
+        fsize =
+            fontSize delta
     in
     List.concat
         [ [ Svg.line
-                [ x1 x
+                [ x1 xcs
                 , y1 <| tos (delta // 2)
-                , x2 x
+                , x2 xcs
                 , y2 <| tos (delta * 5 + delta // 2)
                 , strokeWidth <| tos lineWidth
                 , stroke "black"
                 ]
                 []
+          , Svg.text_
+                [ x xcs
+                , y <| tos (delta * 6)
+                , style <| fontStyle fsize
+                , textAnchor "middle"
+                ]
+                [ Svg.text <| colToString idx ]
           ]
         , List.map (drawVertex delta idx tagger board) [ 0, 1, 2, 3, 4, 5 ]
             |> List.concat
@@ -252,14 +288,16 @@ drawCol delta tagger board idx =
 
 connectWidth : Int -> Int
 connectWidth delta =
-    delta // 8
+    -- Ensures that the connector is at least as wide as the grid
+    -- at all screen sizes.
+    (delta + 48) // 12
 
 
 drawVertex : Int -> Int -> (( Int, Int ) -> msg) -> Board -> Int -> List (Svg msg)
 drawVertex delta colidx tagger board rowidx =
     let
         ( xc, yc ) =
-            ( delta * (colidx + 1), delta * rowidx + delta // 2 )
+            ( delta * colidx + delta // 2, delta * rowidx + delta // 2 )
 
         setp =
             get rowidx colidx board
@@ -360,5 +398,43 @@ drawVertex delta colidx tagger board rowidx =
             ]
         ]
             |> List.concat
+    , [ Svg.rect
+            [ x <| tos (xc - delta // 2)
+            , y <| tos (yc - delta // 2)
+            , width <| tos delta
+            , height <| tos delta
+            , strokeWidth "0"
+            , fillOpacity "0"
+            , Events.onClick (tagger ( rowidx, colidx ))
+            ]
+            []
+      ]
     ]
         |> List.concat
+
+
+rowNameDict : Dict Int String
+rowNameDict =
+    Dict.fromList
+        [ ( 0, "F" )
+        , ( 1, "E" )
+        , ( 2, "D" )
+        , ( 3, "C" )
+        , ( 4, "B" )
+        , ( 5, "A" )
+        ]
+
+
+rowToString : Int -> String
+rowToString y =
+    case Dict.get y rowNameDict of
+        Nothing ->
+            String.fromInt y
+
+        Just s ->
+            s
+
+
+colToString : Int -> String
+colToString x =
+    tos <| x + 1
