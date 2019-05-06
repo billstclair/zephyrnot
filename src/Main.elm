@@ -130,7 +130,19 @@ init : Value -> Url -> Key -> ( Model, Cmd Msg )
 init flags url key =
     { key = key
     , windowSize = ( 1024, 768 )
-    , board = Board.empty
+    , board =
+        Board.empty
+            -- Temporary
+            |> Board.set 1 1
+            |> Board.set 1 2
+            |> Board.set 2 2
+            |> Board.set 3 2
+            |> Board.set 3 1
+            |> Board.set 3 3
+            |> Board.set 3 4
+            |> Board.set 2 4
+            |> Board.set 4 4
+            |> Board.set 4 5
     }
         |> withCmds
             [ Task.perform getViewport Dom.getViewport ]

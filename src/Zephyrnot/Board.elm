@@ -32,6 +32,7 @@ import Svg.Attributes
         , fontSize
         , height
         , r
+        , rx
         , stroke
         , strokeDasharray
         , strokeWidth
@@ -195,8 +196,7 @@ render size tagger board =
     <|
         List.concat
             [ drawRows delta
-            , drawCols delta
-            , drawBoard delta tagger board
+            , drawCols delta tagger board
             ]
 
 
@@ -222,14 +222,14 @@ drawRow delta idx =
         []
 
 
-drawCols : Int -> List (Svg msg)
-drawCols delta =
-    List.map (drawCol delta) [ 0, 1, 2, 3, 4, 5 ]
+drawCols : Int -> (( Int, Int ) -> msg) -> Board -> List (Svg msg)
+drawCols delta tagger board =
+    List.map (drawCol delta tagger board) [ 0, 1, 2, 3, 4, 5 ]
         |> List.concat
 
 
-drawCol : Int -> Int -> List (Svg msg)
-drawCol delta idx =
+drawCol : Int -> (( Int, Int ) -> msg) -> Board -> Int -> List (Svg msg)
+drawCol delta tagger board idx =
     let
         x =
             tos (delta * (idx + 1))
@@ -245,23 +245,102 @@ drawCol delta idx =
                 ]
                 []
           ]
-        , List.map (drawVertex delta idx) [ 0, 1, 2, 3, 4, 5 ]
+        , List.map (drawVertex delta idx tagger board) [ 0, 1, 2, 3, 4, 5 ]
+            |> List.concat
         ]
 
 
-drawVertex : Int -> Int -> Int -> Svg msg
-drawVertex delta colidx rowidx =
-    Svg.circle
-        [ cx <| tos (delta * (colidx + 1))
-        , cy <| tos (delta * rowidx + delta // 2)
-        , r <| tos (delta // 6)
-        , strokeWidth <| tos lineWidthO2
-        , stroke "black"
-        , fill "white"
+drawVertex : Int -> Int -> (( Int, Int ) -> msg) -> Board -> Int -> List (Svg msg)
+drawVertex delta colidx tagger board rowidx =
+    let
+        ( xc, yc ) =
+            ( delta * (colidx + 1), delta * rowidx + delta // 2 )
+    in
+    if not <| get rowidx colidx board then
+        [ Svg.circle
+            [ cx <| tos xc
+            , cy <| tos yc
+            , r <| tos (delta // 6)
+            , strokeWidth <| tos lineWidthO2
+            , stroke "black"
+            , fill "white"
+            ]
+            []
         ]
-        []
 
+    else
+        let
+            leftp =
+                get rowidx (colidx - 1) board
 
-drawBoard : Int -> (( Int, Int ) -> msg) -> Board -> List (Svg msg)
-drawBoard delta tagger board =
-    []
+            rightp =
+                get rowidx (colidx + 1) board
+
+            upp =
+                get (rowidx - 1) colidx board
+
+            downp =
+                get (rowidx + 1) colidx board
+        in
+        [ if not <| leftp || rightp then
+            []
+
+          else
+            let
+                left =
+                    if leftp then
+                        xc - delta
+
+                    else
+                        xc - delta // 6
+
+                right =
+                    if rightp then
+                        xc + delta
+
+                    else
+                        xc + delta // 6
+            in
+            [ Svg.rect
+                [ x <| tos left
+                , y <| tos (yc - delta // 6)
+                , width <| tos (right - left)
+                , height <| tos (delta // 3)
+                , stroke "black"
+                , fill "black"
+                , rx <| tos (delta // 6)
+                ]
+                []
+            ]
+        , if not <| upp || downp then
+            []
+
+          else
+            let
+                top =
+                    if upp then
+                        yc - delta
+
+                    else
+                        yc - delta // 6
+
+                bottom =
+                    if downp then
+                        yc + delta
+
+                    else
+                        yc + delta // 6
+            in
+            [ Svg.rect
+                [ x <| tos (xc - delta // 6)
+                , y <| tos top
+                , width <| tos (delta // 3)
+                , height <| tos (bottom - top)
+                , stroke "black"
+                , fill "black"
+                , rx <| tos (delta // 6)
+                ]
+                []
+            ]
+        ]
+            |> List.concat
