@@ -188,7 +188,7 @@ boardSize model =
         ( w, h ) =
             model.windowSize
     in
-    60 * max w h // 100
+    min (90 * w) (70 * h) // 100
 
 
 view : Model -> Document Msg

@@ -26,9 +26,12 @@ import Set exposing (Set)
 import Svg exposing (Svg, foreignObject, g, line, rect, svg)
 import Svg.Attributes
     exposing
-        ( fill
+        ( cx
+        , cy
+        , fill
         , fontSize
         , height
+        , r
         , stroke
         , strokeDasharray
         , strokeWidth
@@ -161,14 +164,19 @@ tos x =
     String.fromInt x
 
 
+lineWidthO2 : Int
+lineWidthO2 =
+    3
+
+
+lineWidth : Int
+lineWidth =
+    lineWidthO2 * 2
+
+
 overSixPtFive : Int -> Int
 overSixPtFive x =
     2 * x // 13
-
-
-lineWidth : String
-lineWidth =
-    "4"
 
 
 render : Int -> (( Int, Int ) -> msg) -> Board -> Html msg
@@ -178,7 +186,7 @@ render size tagger board =
             tos size
 
         delta =
-            overSixPtFive size
+            overSixPtFive (size - lineWidth)
     in
     svg
         [ width sizeS
@@ -194,17 +202,21 @@ render size tagger board =
 
 drawRows : Int -> List (Svg msg)
 drawRows delta =
-    List.map (drawRow delta) [ 1, 2, 3, 4, 5, 6 ]
+    List.map (drawRow delta) [ 0, 1, 2, 3, 4, 5 ]
 
 
 drawRow : Int -> Int -> Svg msg
 drawRow delta idx =
+    let
+        y =
+            tos (delta * idx + delta // 2)
+    in
     Svg.line
         [ x1 <| tos delta
-        , y1 <| tos (delta * idx)
+        , y1 y
         , x2 <| tos (delta * 6)
-        , y2 <| tos (delta * idx)
-        , strokeWidth lineWidth
+        , y2 y
+        , strokeWidth <| tos lineWidth
         , stroke "black"
         ]
         []
@@ -212,18 +224,40 @@ drawRow delta idx =
 
 drawCols : Int -> List (Svg msg)
 drawCols delta =
-    List.map (drawCol delta) [ 1, 2, 3, 4, 5, 6 ]
+    List.map (drawCol delta) [ 0, 1, 2, 3, 4, 5 ]
+        |> List.concat
 
 
-drawCol : Int -> Int -> Svg msg
+drawCol : Int -> Int -> List (Svg msg)
 drawCol delta idx =
-    Svg.line
-        [ x1 <| tos (delta * idx)
-        , y1 <| tos delta
-        , x2 <| tos (delta * idx)
-        , y2 <| tos (delta * 6)
-        , strokeWidth lineWidth
+    let
+        x =
+            tos (delta * (idx + 1))
+    in
+    List.concat
+        [ [ Svg.line
+                [ x1 x
+                , y1 <| tos (delta // 2)
+                , x2 x
+                , y2 <| tos (delta * 5 + delta // 2)
+                , strokeWidth <| tos lineWidth
+                , stroke "black"
+                ]
+                []
+          ]
+        , List.map (drawVertex delta idx) [ 0, 1, 2, 3, 4, 5 ]
+        ]
+
+
+drawVertex : Int -> Int -> Int -> Svg msg
+drawVertex delta colidx rowidx =
+    Svg.circle
+        [ cx <| tos (delta * (colidx + 1))
+        , cy <| tos (delta * rowidx + delta // 2)
+        , r <| tos (delta // 6)
+        , strokeWidth <| tos lineWidthO2
         , stroke "black"
+        , fill "white"
         ]
         []
 
