@@ -98,18 +98,21 @@ import Svg.Button as SB exposing (Button, Content(..))
 import Svg.Events
 import Task
 import Url exposing (Url)
-import Zephyrnot.Board as Board exposing (Board, Winner(..))
+import Zephyrnot.Board as Board exposing (Board, Decoration(..), Winner(..))
 
 
 type alias Model =
     { key : Key
     , windowSize : ( Int, Int )
+    , decoration : Decoration
     , board : Board
     }
 
 
 type Msg
     = Noop
+    | SetDecoration Decoration
+    | Click ( Int, Int )
     | WindowResize Int Int
     | HandleUrlRequest UrlRequest
     | HandleUrlChange Url
@@ -130,6 +133,7 @@ init : Value -> Url -> Key -> ( Model, Cmd Msg )
 init flags url key =
     { key = key
     , windowSize = ( 1024, 768 )
+    , decoration = ColSelectedDecoration 3
     , board =
         Board.empty
             -- Temporary
@@ -162,6 +166,17 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Noop ->
+            model |> withNoCmd
+
+        SetDecoration decoration ->
+            { model | decoration = decoration }
+                |> withNoCmd
+
+        Click ( row, col ) ->
+            let
+                ( r, c ) =
+                    Debug.log "Click" ( row, col )
+            in
             model |> withNoCmd
 
         WindowResize w h ->
@@ -219,8 +234,35 @@ view model =
                 [ text "Invented by Chris St. Clair" ]
             , p []
                 [ Board.render (boardSize model)
-                    (\_ -> Noop)
+                    Click
+                    model.decoration
                     model.board
+                ]
+            , let
+                ( none, ( rowp, colp, filledp ) ) =
+                    case model.decoration of
+                        NoDecoration ->
+                            ( True, ( False, False, False ) )
+
+                        RowSelectedDecoration _ ->
+                            ( False, ( True, False, False ) )
+
+                        ColSelectedDecoration _ ->
+                            ( False, ( False, True, False ) )
+
+                        _ ->
+                            ( False, ( False, False, True ) )
+              in
+              p []
+                [ radio "none" none (SetDecoration NoDecoration)
+                , text " "
+                , radio "row" rowp (SetDecoration (RowSelectedDecoration 3))
+                , text " "
+                , radio "col" colp (SetDecoration (ColSelectedDecoration 2))
+                , text " "
+                , radio "conflict"
+                    filledp
+                    (SetDecoration (AlreadyFilledDecoration ( 1, 3 )))
                 ]
             , p []
                 [ a
@@ -238,3 +280,16 @@ view model =
             ]
         ]
     }
+
+
+radio : String -> Bool -> msg -> Html msg
+radio name isChecked msg =
+    label []
+        [ input
+            [ type_ "radio"
+            , onClick msg
+            , checked isChecked
+            ]
+            []
+        , text name
+        ]

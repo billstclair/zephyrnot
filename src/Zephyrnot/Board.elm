@@ -12,6 +12,7 @@
 
 module Zephyrnot.Board exposing
     ( Board
+    , Decoration(..)
     , Winner(..)
     , empty
     , get
@@ -35,6 +36,7 @@ import Svg.Attributes
         , height
         , r
         , rx
+        , ry
         , stroke
         , strokeDasharray
         , strokeWidth
@@ -179,8 +181,15 @@ lineWidth =
     lineWidthO2 * 2
 
 
-render : Int -> (( Int, Int ) -> msg) -> Board -> Html msg
-render size tagger board =
+type Decoration
+    = NoDecoration
+    | RowSelectedDecoration Int
+    | ColSelectedDecoration Int
+    | AlreadyFilledDecoration ( Int, Int )
+
+
+render : Int -> (( Int, Int ) -> msg) -> Decoration -> Board -> Html msg
+render size tagger decoration board =
     let
         sizeS =
             tos size
@@ -196,6 +205,7 @@ render size tagger board =
         List.concat
             [ drawRows delta
             , drawCols delta tagger board
+            , drawDecoration delta decoration
             ]
 
 
@@ -411,6 +421,54 @@ drawVertex delta colidx tagger board rowidx =
       ]
     ]
         |> List.concat
+
+
+drawDecoration : Int -> Decoration -> List (Svg msg)
+drawDecoration delta decoration =
+    case decoration of
+        NoDecoration ->
+            []
+
+        RowSelectedDecoration rowidx ->
+            [ Svg.rect
+                [ x <| tos (delta // 2 - delta // 6 - 1)
+                , y <| tos (rowidx * delta + delta // 2 - delta // 6 - 1)
+                , width <| tos (5 * delta + delta // 3 + 2)
+                , height <| tos (delta // 3 + 2)
+                , rx <| tos (delta // 6 + 1)
+                , strokeWidth "0"
+                , fillOpacity "0.3"
+                ]
+                []
+            ]
+
+        ColSelectedDecoration colidx ->
+            [ Svg.rect
+                [ y <| tos (delta // 2 - delta // 6 - 1)
+                , x <| tos (colidx * delta + delta // 2 - delta // 6 - 1)
+                , height <| tos (5 * delta + delta // 3 + 2)
+                , width <| tos (delta // 3 + 2)
+                , ry <| tos (delta // 6 + 1)
+                , strokeWidth "0"
+                , fillOpacity "0.3"
+                ]
+                []
+            ]
+
+        AlreadyFilledDecoration ( rowidx, colidx ) ->
+            let
+                ( xc, yc ) =
+                    ( delta * colidx + delta // 2, delta * rowidx + delta // 2 )
+            in
+            [ Svg.circle
+                [ cx <| tos xc
+                , cy <| tos yc
+                , r <| tos (delta // 4)
+                , strokeWidth "0"
+                , fill "red"
+                ]
+                []
+            ]
 
 
 rowNameDict : Dict Int String
