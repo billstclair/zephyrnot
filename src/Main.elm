@@ -466,14 +466,20 @@ view model =
                     ]
                     [ text message ]
                 , br
-                , text "Stone Placer: "
-                , text <|
-                    case model.player of
-                        Zephyrus ->
-                            "Zephyrus"
+                , if model.winner /= NoWinner then
+                    text ""
 
-                        Notus ->
-                            "Notus"
+                  else
+                    span []
+                        [ text "Stone Placer: "
+                        , text <|
+                            case model.player of
+                                Zephyrus ->
+                                    "Zephyrus"
+
+                                Notus ->
+                                    "Notus"
+                        ]
                 , br
                 , text "Choose first: "
                 , radio "choose"
