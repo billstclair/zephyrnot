@@ -44,7 +44,7 @@ import Html
         , textarea
         , tr
         )
-import Html.Attributes
+import Html.Attributes as Attributes
     exposing
         ( align
         , alt
@@ -98,13 +98,23 @@ import Svg.Button as SB exposing (Button, Content(..))
 import Svg.Events
 import Task
 import Url exposing (Url)
-import Zephyrnot.Board as Board exposing (Board, Decoration(..), Winner(..))
+import Zephyrnot.Board as Board
+    exposing
+        ( Board
+        , Decoration(..)
+        , Player(..)
+        , Winner(..)
+        )
 
 
 type alias Model =
     { key : Key
     , windowSize : ( Int, Int )
     , decoration : Decoration
+    , chooseFirst : Player
+    , player : Player
+    , winner : Winner
+    , moves : List String
     , board : Board
     }
 
@@ -112,6 +122,8 @@ type alias Model =
 type Msg
     = Noop
     | SetDecoration Decoration
+    | SetChooseFirst Player
+    | NewGame
     | Click ( Int, Int )
     | WindowResize Int Int
     | HandleUrlRequest UrlRequest
@@ -129,25 +141,34 @@ main =
         }
 
 
+{-| No longer used. An initial state to test Board.render
+-}
+initializeBoard : Board -> Board
+initializeBoard board =
+    board
+        |> Board.set 0 3
+        |> Board.set 1 1
+        |> Board.set 1 2
+        |> Board.set 2 2
+        |> Board.set 3 2
+        |> Board.set 3 1
+        |> Board.set 3 3
+        |> Board.set 3 4
+        |> Board.set 2 4
+        |> Board.set 4 4
+        |> Board.set 4 5
+
+
 init : Value -> Url -> Key -> ( Model, Cmd Msg )
 init flags url key =
     { key = key
     , windowSize = ( 1024, 768 )
-    , decoration = ColSelectedDecoration 3
-    , board =
-        Board.empty
-            -- Temporary
-            |> Board.set 0 3
-            |> Board.set 1 1
-            |> Board.set 1 2
-            |> Board.set 2 2
-            |> Board.set 3 2
-            |> Board.set 3 1
-            |> Board.set 3 3
-            |> Board.set 3 4
-            |> Board.set 2 4
-            |> Board.set 4 4
-            |> Board.set 4 5
+    , decoration = NoDecoration
+    , chooseFirst = Zephyrus
+    , player = Zephyrus
+    , winner = NoWinner
+    , moves = []
+    , board = Board.empty
     }
         |> withCmds
             [ Task.perform getViewport Dom.getViewport ]
@@ -172,12 +193,147 @@ update msg model =
             { model | decoration = decoration }
                 |> withNoCmd
 
+        SetChooseFirst player ->
+            { model | chooseFirst = player }
+                |> withNoCmd
+
+        NewGame ->
+            { model
+                | board = Board.empty
+                , decoration = NoDecoration
+                , player = Zephyrus
+                , winner = NoWinner
+                , moves = []
+            }
+                |> withNoCmd
+
         Click ( row, col ) ->
-            let
-                ( r, c ) =
-                    Debug.log "Click" ( row, col )
-            in
-            model |> withNoCmd
+            if model.winner /= NoWinner then
+                model |> withNoCmd
+
+            else
+                let
+                    mdl =
+                        case model.decoration of
+                            NoDecoration ->
+                                { model
+                                    | decoration =
+                                        if model.chooseFirst == Zephyrus then
+                                            ColSelectedDecoration col
+
+                                        else
+                                            RowSelectedDecoration row
+                                }
+
+                            ColSelectedDecoration c ->
+                                let
+                                    filled =
+                                        Board.get row c model.board
+                                in
+                                { model
+                                    | decoration =
+                                        if filled then
+                                            AlreadyFilledDecoration ( row, c )
+
+                                        else
+                                            NoDecoration
+                                    , moves =
+                                        if filled then
+                                            model.moves
+
+                                        else
+                                            cellName ( row, c ) :: model.moves
+                                    , board =
+                                        if filled then
+                                            model.board
+
+                                        else
+                                            Board.set row c model.board
+                                    , player =
+                                        if filled then
+                                            model.player
+
+                                        else
+                                            otherPlayer model.player
+                                }
+
+                            RowSelectedDecoration r ->
+                                let
+                                    filled =
+                                        Board.get r col model.board
+                                in
+                                { model
+                                    | decoration =
+                                        if filled then
+                                            AlreadyFilledDecoration ( r, col )
+
+                                        else
+                                            NoDecoration
+                                    , moves =
+                                        if filled then
+                                            model.moves
+
+                                        else
+                                            cellName ( r, col ) :: model.moves
+                                    , board =
+                                        if filled then
+                                            model.board
+
+                                        else
+                                            Board.set r col model.board
+                                    , player =
+                                        if filled then
+                                            model.player
+
+                                        else
+                                            otherPlayer model.player
+                                }
+
+                            AlreadyFilledDecoration ( r, c ) ->
+                                let
+                                    ( rr, cc ) =
+                                        if model.player == Zephyrus then
+                                            ( r, col )
+
+                                        else
+                                            ( row, c )
+
+                                    filled =
+                                        Board.get rr cc model.board
+                                in
+                                { model
+                                    | decoration =
+                                        if filled then
+                                            AlreadyFilledDecoration ( rr, cc )
+
+                                        else
+                                            NoDecoration
+                                    , moves =
+                                        if filled then
+                                            model.moves
+
+                                        else
+                                            (cellName ( r, c )
+                                                ++ "/"
+                                                ++ cellName ( rr, cc )
+                                            )
+                                                :: model.moves
+                                    , board =
+                                        if filled then
+                                            model.board
+
+                                        else
+                                            Board.set rr cc model.board
+                                    , player =
+                                        if filled then
+                                            model.player
+
+                                        else
+                                            otherPlayer model.player
+                                }
+                in
+                { mdl | winner = Board.winner model.player mdl.board }
+                    |> withNoCmd
 
         WindowResize w h ->
             { model | windowSize = ( w, h ) }
@@ -196,6 +352,20 @@ update msg model =
 
         HandleUrlChange url ->
             model |> withNoCmd
+
+
+cellName : ( Int, Int ) -> String
+cellName ( rowidx, colidx ) =
+    Board.rowToString rowidx ++ Board.colToString colidx
+
+
+otherPlayer : Player -> Player
+otherPlayer player =
+    if player == Zephyrus then
+        Notus
+
+    else
+        Zephyrus
 
 
 subscriptions : Model -> Sub Msg
@@ -221,6 +391,37 @@ boardSize model =
 
 view : Model -> Document Msg
 view model =
+    let
+        message =
+            case model.winner of
+                HorizontalWinner ->
+                    "Zephyrus wins!"
+
+                VerticalWinner ->
+                    "Notus wins!"
+
+                NoWinner ->
+                    case model.decoration of
+                        NoDecoration ->
+                            if model.chooseFirst == Zephyrus then
+                                "Zephyrus pick a column"
+
+                            else
+                                "Notus pick a row"
+
+                        ColSelectedDecoration _ ->
+                            "Notus pick a row"
+
+                        RowSelectedDecoration _ ->
+                            "Zephyrus pick a column"
+
+                        AlreadyFilledDecoration _ ->
+                            if model.player == Zephyrus then
+                                "Zephyrus pick another column"
+
+                            else
+                                "Notus pick another row"
+    in
     { title = "Zephyrnot"
     , body =
         [ div
@@ -238,31 +439,60 @@ view model =
                     model.decoration
                     model.board
                 ]
-            , let
-                ( none, ( rowp, colp, filledp ) ) =
-                    case model.decoration of
-                        NoDecoration ->
-                            ( True, ( False, False, False ) )
+            , p
+                []
+                [ span
+                    [ style "color"
+                        (if model.winner == NoWinner then
+                            "red"
 
-                        RowSelectedDecoration _ ->
-                            ( False, ( True, False, False ) )
+                         else
+                            "orange"
+                        )
+                    , style "font-weight"
+                        (if model.winner == NoWinner then
+                            "normal"
 
-                        ColSelectedDecoration _ ->
-                            ( False, ( False, True, False ) )
+                         else
+                            "bold"
+                        )
+                    , style "font-size"
+                        (if model.winner == NoWinner then
+                            "100%"
 
-                        _ ->
-                            ( False, ( False, False, True ) )
-              in
-              p []
-                [ radio "none" none (SetDecoration NoDecoration)
+                         else
+                            "120%"
+                        )
+                    ]
+                    [ text message ]
+                , br
+                , text "Stone Placer: "
+                , text <|
+                    case model.player of
+                        Zephyrus ->
+                            "Zephyrus"
+
+                        Notus ->
+                            "Notus"
+                , br
+                , text "Choose first: "
+                , radio "choose"
+                    "Zephyrus"
+                    (model.chooseFirst == Zephyrus)
+                    (SetChooseFirst Zephyrus)
                 , text " "
-                , radio "row" rowp (SetDecoration (RowSelectedDecoration 3))
-                , text " "
-                , radio "col" colp (SetDecoration (ColSelectedDecoration 2))
-                , text " "
-                , radio "conflict"
-                    filledp
-                    (SetDecoration (AlreadyFilledDecoration ( 1, 3 )))
+                , radio "choose"
+                    "Notus"
+                    (model.chooseFirst == Notus)
+                    (SetChooseFirst Notus)
+                , br
+                , button
+                    [ onClick NewGame ]
+                    [ text "New Game" ]
+                ]
+            , p []
+                [ text "Moves: "
+                , text <| movesToString (List.reverse model.moves)
                 ]
             , p []
                 [ a
@@ -282,11 +512,81 @@ view model =
     }
 
 
-radio : String -> Bool -> msg -> Html msg
-radio name isChecked msg =
+pairup : List String -> List ( String, String )
+pairup strings =
+    let
+        loop list res =
+            case list of
+                [] ->
+                    List.reverse res
+
+                [ x ] ->
+                    List.reverse <| ( x, "" ) :: res
+
+                x :: (y :: tail) ->
+                    loop tail (( x, y ) :: res)
+    in
+    loop strings []
+
+
+movesToString : List String -> String
+movesToString moves =
+    pairup moves
+        |> List.map pairToString
+        |> List.intersperse ", "
+        |> String.concat
+
+
+pairToString : ( String, String ) -> String
+pairToString ( a, b ) =
+    if b == "" then
+        a
+
+    else
+        "(" ++ a ++ ", " ++ b ++ ")"
+
+
+
+-- For testing. No longer used.
+
+
+decorationRadios : Model -> Html Msg
+decorationRadios model =
+    let
+        ( none, ( rowp, colp, filledp ) ) =
+            case model.decoration of
+                NoDecoration ->
+                    ( True, ( False, False, False ) )
+
+                RowSelectedDecoration _ ->
+                    ( False, ( True, False, False ) )
+
+                ColSelectedDecoration _ ->
+                    ( False, ( False, True, False ) )
+
+                _ ->
+                    ( False, ( False, False, True ) )
+    in
+    p []
+        [ radio "decoration" "none" none (SetDecoration NoDecoration)
+        , text " "
+        , radio "decoration" "row" rowp (SetDecoration (RowSelectedDecoration 3))
+        , text " "
+        , radio "decoration" "col" colp (SetDecoration (ColSelectedDecoration 2))
+        , text " "
+        , radio "decoration"
+            "conflict"
+            filledp
+            (SetDecoration (AlreadyFilledDecoration ( 1, 3 )))
+        ]
+
+
+radio : String -> String -> Bool -> msg -> Html msg
+radio group name isChecked msg =
     label []
         [ input
             [ type_ "radio"
+            , Attributes.name group
             , onClick msg
             , checked isChecked
             ]

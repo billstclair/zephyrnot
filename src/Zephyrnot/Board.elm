@@ -13,10 +13,13 @@
 module Zephyrnot.Board exposing
     ( Board
     , Decoration(..)
+    , Player(..)
     , Winner(..)
+    , colToString
     , empty
     , get
     , render
+    , rowToString
     , set
     , winner
     )
@@ -91,6 +94,14 @@ set row col board =
                 board
 
 
+type
+    Player
+    -- Choose column
+    = Zephyrus
+      -- Choose row
+    | Notus
+
+
 type Winner
     = NoWinner
     | HorizontalWinner
@@ -99,8 +110,8 @@ type Winner
 
 {-| It might be worthwhile to have an option to increment row or col first.
 -}
-winner : Board -> Winner
-winner board =
+winner : Player -> Board -> Winner
+winner player board =
     let
         findPath : Int -> Int -> (( Int, Int ) -> Bool) -> Set ( Int, Int ) -> ( Bool, Set ( Int, Int ) )
         findPath row col done seen =
@@ -148,22 +159,56 @@ winner board =
                             else
                                 findPath (row - 1) col done seen5
 
-        ( hres, _ ) =
-            findPath 0 0 (\( _, col ) -> col > 5) Set.empty
-    in
-    if hres then
-        HorizontalWinner
+        hloop row seen =
+            let
+                ( res, seen2 ) =
+                    findPath row 0 (\( _, col ) -> col > 5) seen
+            in
+            if res then
+                True
 
-    else
-        let
-            ( vres, _ ) =
-                findPath 0 0 (\( row, _ ) -> row > 5) Set.empty
-        in
-        if vres then
-            VerticalWinner
+            else if row >= 5 then
+                False
+
+            else
+                hloop (row + 1) seen2
+
+        vloop col seen =
+            let
+                ( res, seen2 ) =
+                    findPath 0 col (\( row, _ ) -> row > 5) seen
+            in
+            if res then
+                True
+
+            else if col >= 5 then
+                False
+
+            else
+                vloop (col + 1) seen2
+    in
+    let
+        hwin =
+            hloop 0 Set.empty
+
+        vwin =
+            vloop 0 Set.empty
+    in
+    if hwin && vwin then
+        if player == Zephyrus then
+            HorizontalWinner
 
         else
-            NoWinner
+            VerticalWinner
+
+    else if hwin then
+        HorizontalWinner
+
+    else if vwin then
+        VerticalWinner
+
+    else
+        NoWinner
 
 
 tos : Int -> String
@@ -204,8 +249,9 @@ render size tagger decoration board =
     <|
         List.concat
             [ drawRows delta
-            , drawCols delta tagger board
+            , drawCols delta board
             , drawDecoration delta decoration
+            , drawClickRects delta tagger
             ]
 
 
@@ -255,14 +301,51 @@ drawRow delta idx =
     ]
 
 
-drawCols : Int -> (( Int, Int ) -> msg) -> Board -> List (Svg msg)
-drawCols delta tagger board =
-    List.map (drawCol delta tagger board) [ 0, 1, 2, 3, 4, 5 ]
+drawClickRects : Int -> (( Int, Int ) -> msg) -> List (Svg msg)
+drawClickRects delta tagger =
+    let
+        indices =
+            [ 0, 1, 2, 3, 4, 5 ]
+
+        docol rowidx colidx res =
+            drawClickRect delta tagger rowidx colidx
+                :: res
+
+        dorow rowidx res =
+            List.foldl (docol rowidx) res indices
+    in
+    List.foldl dorow [] indices
+
+
+drawClickRect : Int -> (( Int, Int ) -> msg) -> Int -> Int -> Svg msg
+drawClickRect delta tagger rowidx colidx =
+    let
+        xc =
+            delta * colidx + delta // 2
+
+        yc =
+            delta * rowidx + delta // 2
+    in
+    Svg.rect
+        [ x <| tos (xc - delta // 2)
+        , y <| tos (yc - delta // 2)
+        , width <| tos delta
+        , height <| tos delta
+        , strokeWidth "0"
+        , fillOpacity "0"
+        , Events.onClick (tagger ( rowidx, colidx ))
+        ]
+        []
+
+
+drawCols : Int -> Board -> List (Svg msg)
+drawCols delta board =
+    List.map (drawCol delta board) [ 0, 1, 2, 3, 4, 5 ]
         |> List.concat
 
 
-drawCol : Int -> (( Int, Int ) -> msg) -> Board -> Int -> List (Svg msg)
-drawCol delta tagger board idx =
+drawCol : Int -> Board -> Int -> List (Svg msg)
+drawCol delta board idx =
     let
         xc =
             delta * idx + delta // 2
@@ -291,7 +374,7 @@ drawCol delta tagger board idx =
                 ]
                 [ Svg.text <| colToString idx ]
           ]
-        , List.map (drawVertex delta idx tagger board) [ 0, 1, 2, 3, 4, 5 ]
+        , List.map (drawVertex delta idx board) [ 0, 1, 2, 3, 4, 5 ]
             |> List.concat
         ]
 
@@ -303,8 +386,8 @@ connectWidth delta =
     (delta + 48) // 12
 
 
-drawVertex : Int -> Int -> (( Int, Int ) -> msg) -> Board -> Int -> List (Svg msg)
-drawVertex delta colidx tagger board rowidx =
+drawVertex : Int -> Int -> Board -> Int -> List (Svg msg)
+drawVertex delta colidx board rowidx =
     let
         ( xc, yc ) =
             ( delta * colidx + delta // 2, delta * rowidx + delta // 2 )
@@ -408,17 +491,6 @@ drawVertex delta colidx tagger board rowidx =
             ]
         ]
             |> List.concat
-    , [ Svg.rect
-            [ x <| tos (xc - delta // 2)
-            , y <| tos (yc - delta // 2)
-            , width <| tos delta
-            , height <| tos delta
-            , strokeWidth "0"
-            , fillOpacity "0"
-            , Events.onClick (tagger ( rowidx, colidx ))
-            ]
-            []
-      ]
     ]
         |> List.concat
 
@@ -474,12 +546,12 @@ drawDecoration delta decoration =
 rowNameDict : Dict Int String
 rowNameDict =
     Dict.fromList
-        [ ( 0, "F" )
-        , ( 1, "E" )
-        , ( 2, "D" )
-        , ( 3, "C" )
-        , ( 4, "B" )
-        , ( 5, "A" )
+        [ ( 0, "f" )
+        , ( 1, "e" )
+        , ( 2, "d" )
+        , ( 3, "c" )
+        , ( 4, "b" )
+        , ( 5, "a" )
         ]
 
 
