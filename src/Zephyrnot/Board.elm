@@ -645,7 +645,7 @@ drawCompass delta =
                 [ Svg.polygon
                     [ points <|
                         "0,0 "
-                            ++ ("0," ++ tos (negate longR) ++ " ")
+                            ++ ("0," ++ tos longR ++ " ")
                             ++ (connection ++ " ")
                             ++ "0,0"
                     ]
@@ -653,8 +653,8 @@ drawCompass delta =
                 , Svg.polygon
                     [ points <|
                         (connection ++ " ")
-                            ++ (tos (negate innerX) ++ "," ++ tos (negate innerX) ++ " ")
-                            ++ (tos (negate (shortX + shorterX)) ++ "," ++ tos (negate shortX))
+                            ++ (tos innerX ++ "," ++ tos innerX ++ " ")
+                            ++ (tos (shortX + shorterX) ++ "," ++ tos shortX)
                             ++ connection
                     ]
                     []
