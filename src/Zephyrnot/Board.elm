@@ -33,15 +33,18 @@ import Svg.Attributes
     exposing
         ( cx
         , cy
+        , d
         , fill
         , fillOpacity
         , fontSize
         , height
+        , points
         , r
         , rx
         , ry
         , stroke
         , strokeDasharray
+        , strokeOpacity
         , strokeWidth
         , style
         , textAnchor
@@ -248,7 +251,8 @@ render size tagger decoration board =
         ]
     <|
         List.concat
-            [ drawRows delta
+            [ [ drawCompass delta ]
+            , drawRows delta
             , drawCols delta board
             , drawDecoration delta decoration
             , drawClickRects delta tagger
@@ -568,3 +572,156 @@ rowToString y =
 colToString : Int -> String
 colToString x =
     tos <| x + 1
+
+
+drawCompass : Int -> Svg msg
+drawCompass delta =
+    let
+        c =
+            3 * delta
+
+        cs =
+            tos c
+
+        thickness =
+            2 * lineWidth
+
+        outerR =
+            round (toFloat delta * sqrt (1 / 2))
+
+        innerR =
+            outerR - delta // 6 - lineWidthO2 // 2
+
+        innerX =
+            round (toFloat innerR / sqrt 2)
+
+        shortR =
+            innerR // 3
+
+        shortX =
+            round (toFloat shortR / sqrt 2)
+
+        shorterX =
+            2 * shortX // 3
+
+        r =
+            outerR + thickness // 2
+
+        longR =
+            r + delta // 10
+
+        fsize =
+            fontSize delta
+
+        fr =
+            longR + fsize // 4
+
+        connection =
+            tos (negate shortX) ++ "," ++ tos (negate shortX)
+
+        arcStart =
+            "0," ++ tos r
+
+        arcAngle =
+            60
+
+        arcRotate =
+            (arcAngle - 90) // 2
+
+        arcRadians =
+            degrees arcAngle
+
+        arcEnd =
+            (tos <| round (toFloat r * sin arcRadians))
+                ++ ","
+                ++ (tos <| round (toFloat r * cos arcRadians))
+
+        ellipseRadii =
+            tos r ++ "," ++ tos r
+
+        quarterImage =
+            g
+                []
+                [ Svg.polygon
+                    [ points <|
+                        "0,0 "
+                            ++ ("0," ++ tos (negate longR) ++ " ")
+                            ++ (connection ++ " ")
+                            ++ "0,0"
+                    ]
+                    []
+                , Svg.polygon
+                    [ points <|
+                        (connection ++ " ")
+                            ++ (tos (negate innerX) ++ "," ++ tos (negate innerX) ++ " ")
+                            ++ (tos (negate (shortX + shorterX)) ++ "," ++ tos (negate shortX))
+                            ++ connection
+                    ]
+                    []
+                , g
+                    [ transform <|
+                        "rotate("
+                            ++ tos arcRotate
+                            ++ ")"
+                    ]
+                    [ Svg.path
+                        [ d <|
+                            Debug.log "arc"
+                                (("M " ++ arcStart ++ " ")
+                                    ++ ("A"
+                                            ++ ellipseRadii
+                                            ++ " 0 0,0 "
+                                            ++ arcEnd
+                                       )
+                                )
+                        , strokeWidth <| tos thickness
+                        , stroke "black"
+                        , fill "none"
+                        ]
+                        []
+                    ]
+                ]
+    in
+    g
+        [ transform <|
+            "translate("
+                ++ cs
+                ++ " "
+                ++ cs
+                ++ ")"
+        , fillOpacity "0.5"
+        , strokeOpacity "0.5"
+        ]
+        [ quarterImage
+        , g [ transform "rotate(90)" ] [ quarterImage ]
+        , g [ transform "rotate(180)" ] [ quarterImage ]
+        , g [ transform "rotate(270)" ] [ quarterImage ]
+        , Svg.text_
+            [ x "0"
+            , y <| tos (negate <| fr)
+            , style <| fontStyle fsize
+            , textAnchor "middle"
+            ]
+            [ Svg.text "N" ]
+        , Svg.text_
+            [ x "0"
+            , y <| tos (fr + 3 * fsize // 4)
+            , style <| fontStyle fsize
+            , textAnchor "middle"
+            ]
+            [ Svg.text "S" ]
+        , Svg.text_
+            [ x <| tos (negate <| fr + fsize // 3)
+            , y <| tos (fsize // 3)
+            , style <| fontStyle fsize
+            , textAnchor "middle"
+            ]
+            [ Svg.text "W" ]
+        , Svg.text_
+            [ x <| tos (fr + fsize // 3)
+            , y <| tos (fsize // 3)
+            , style <| fontStyle fsize
+            , textAnchor "middle"
+            ]
+            [ Svg.text "E" ]
+        ]
