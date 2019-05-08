@@ -1,0 +1,6 @@
+@font-face {
+    font-family: 'Herculanum';
+    src: local('Herculanum'),
+         url('fonts/Herculanum.woff') format('woff'),
+         url('fonts/Herculanum.woff2') format('woff2');
+}

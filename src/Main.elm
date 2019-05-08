@@ -27,6 +27,7 @@ import Html
         , button
         , div
         , fieldset
+        , h1
         , h2
         , h3
         , h4
@@ -389,6 +390,11 @@ boardSize model =
     min (90 * w) (70 * h) // 100
 
 
+herculanumStyle : Attribute msg
+herculanumStyle =
+    style "font-family" "Herculanum, sans-serif"
+
+
 view : Model -> Document Msg
 view model =
     let
@@ -422,14 +428,20 @@ view model =
                             else
                                 "Notus pick another row"
     in
-    { title = "Zephyrnot"
+    { title = "ZEPHYRNOT"
     , body =
         [ div
             [ align "center"
             ]
-            [ h2 [ style "margin" "0" ]
-                [ text "Zephyrnot" ]
-            , h3 [ style "margin" "0" ]
+            [ h1
+                [ style "margin" "0 0 0.2em 0"
+                , herculanumStyle
+                ]
+                [ text "ZEPHYRNOT" ]
+            , h2
+                [ style "margin" "0 0 0.2em 0"
+                , herculanumStyle
+                ]
                 [ text "Feud of the Winds" ]
             , p [ style "margin" "0" ]
                 [ text "Invented by Chris St. Clair" ]
