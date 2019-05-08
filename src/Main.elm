@@ -437,7 +437,7 @@ view model =
                 [ style "margin" "0 0 0.2em 0"
                 , herculanumStyle
                 ]
-                [ text "ZEPHYRNOT" ]
+                [ text "Zephyrnot" ]
             , h2
                 [ style "margin" "0 0 0.2em 0"
                 , herculanumStyle

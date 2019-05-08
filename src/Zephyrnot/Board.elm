@@ -28,7 +28,7 @@ import Array exposing (Array)
 import Dict exposing (Dict)
 import Html exposing (Html)
 import Set exposing (Set)
-import Svg exposing (Svg, foreignObject, g, line, rect, svg)
+import Svg exposing (Attribute, Svg, foreignObject, g, line, rect, svg)
 import Svg.Attributes
     exposing
         ( cx
@@ -272,7 +272,7 @@ fontSize delta =
 
 fontStyle : Int -> String
 fontStyle fsize =
-    "font-weight: bold; font-size: " ++ tos fsize
+    "font-weight: bold; font-size: " ++ tos fsize ++ ";"
 
 
 drawRow : Int -> Int -> List (Svg msg)
