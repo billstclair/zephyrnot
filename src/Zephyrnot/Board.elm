@@ -608,7 +608,7 @@ drawCompass delta =
             outerR
 
         longR =
-            r + delta // 7
+            r + delta // 6
 
         fsize =
             fontSize delta
