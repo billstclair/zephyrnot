@@ -617,7 +617,7 @@ drawCompass delta =
             longR + fsize // 4
 
         connection =
-            tos (negate shortX) ++ "," ++ tos (negate shortX)
+            tos shortX ++ "," ++ tos shortX
 
         arcStart =
             "0," ++ tos r
@@ -654,7 +654,7 @@ drawCompass delta =
                     [ points <|
                         (connection ++ " ")
                             ++ (tos innerX ++ "," ++ tos innerX ++ " ")
-                            ++ (tos (shortX + shorterX) ++ "," ++ tos shortX)
+                            ++ (tos (shortX + shorterX) ++ "," ++ tos shortX ++ " ")
                             ++ connection
                     ]
                     []
