@@ -584,7 +584,7 @@ drawCompass delta =
             tos c
 
         thickness =
-            2 * lineWidth
+            lineWidth + 4
 
         outerR =
             round (toFloat delta * sqrt (1 / 2))
@@ -605,7 +605,7 @@ drawCompass delta =
             2 * shortX // 3
 
         r =
-            outerR + thickness // 2
+            outerR
 
         longR =
             r + delta // 10
