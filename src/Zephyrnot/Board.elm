@@ -679,6 +679,15 @@ drawCompass delta =
                         []
                     ]
                 ]
+
+        compassText cx cy txt =
+            Svg.text_
+                [ x <| tos cx
+                , y <| tos cy
+                , style <| fontStyle fsize
+                , textAnchor "middle"
+                ]
+                [ Svg.text txt ]
     in
     g
         [ transform <|
@@ -694,32 +703,8 @@ drawCompass delta =
         , g [ transform "rotate(90)" ] [ quarterImage ]
         , g [ transform "rotate(180)" ] [ quarterImage ]
         , g [ transform "rotate(270)" ] [ quarterImage ]
-        , Svg.text_
-            [ x "0"
-            , y <| tos (negate <| fr)
-            , style <| fontStyle fsize
-            , textAnchor "middle"
-            ]
-            [ Svg.text "N" ]
-        , Svg.text_
-            [ x "0"
-            , y <| tos (fr + 3 * fsize // 4)
-            , style <| fontStyle fsize
-            , textAnchor "middle"
-            ]
-            [ Svg.text "S" ]
-        , Svg.text_
-            [ x <| tos (negate <| fr + fsize // 3)
-            , y <| tos (fsize // 3)
-            , style <| fontStyle fsize
-            , textAnchor "middle"
-            ]
-            [ Svg.text "W" ]
-        , Svg.text_
-            [ x <| tos (fr + fsize // 3)
-            , y <| tos (fsize // 3)
-            , style <| fontStyle fsize
-            , textAnchor "middle"
-            ]
-            [ Svg.text "E" ]
+        , compassText 0 (negate fr) "N"
+        , compassText 0 (fr + 3 * fsize // 4) "S"
+        , compassText (negate <| fr + fsize // 3) (fsize // 3) "W"
+        , compassText (fr + fsize // 3) (fsize // 3) "E"
         ]

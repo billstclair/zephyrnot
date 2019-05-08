@@ -16,6 +16,7 @@ import Browser exposing (Document, UrlRequest(..))
 import Browser.Dom as Dom exposing (Viewport)
 import Browser.Events as Events
 import Browser.Navigation as Navigation exposing (Key)
+import Char
 import Cmd.Extra exposing (withCmd, withCmds, withNoCmd)
 import Dict exposing (Dict)
 import Html
@@ -561,7 +562,7 @@ pairToString ( a, b ) =
         a
 
     else
-        "(" ++ a ++ ", " ++ b ++ ")"
+        "(" ++ a ++ "," ++ chars.nbsp ++ b ++ ")"
 
 
 
@@ -611,3 +612,15 @@ radio group name isChecked msg =
             []
         , text name
         ]
+
+
+codestr : Int -> String
+codestr code =
+    String.fromList [ Char.fromCode code ]
+
+
+chars =
+    { leftCurlyQuote = codestr 0x201C
+    , copyright = codestr 0xA9
+    , nbsp = codestr 0xA0
+    }
