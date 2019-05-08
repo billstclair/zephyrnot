@@ -623,7 +623,7 @@ drawCompass delta =
             "0," ++ tos r
 
         arcAngle =
-            60
+            70
 
         arcRotate =
             (arcAngle - 90) // 2
@@ -666,14 +666,12 @@ drawCompass delta =
                     ]
                     [ Svg.path
                         [ d <|
-                            Debug.log "arc"
-                                (("M " ++ arcStart ++ " ")
-                                    ++ ("A"
-                                            ++ ellipseRadii
-                                            ++ " 0 0,0 "
-                                            ++ arcEnd
-                                       )
-                                )
+                            ("M " ++ arcStart ++ " ")
+                                ++ ("A"
+                                        ++ ellipseRadii
+                                        ++ " 0 0,0 "
+                                        ++ arcEnd
+                                   )
                         , strokeWidth <| tos thickness
                         , stroke "black"
                         , fill "none"
