@@ -13,3 +13,5 @@
   * Click again to confirm.
   * New node is selected, or old node is highlighted for change.
 
+3. Convert instructions PDF to another game page.
+

@@ -366,6 +366,12 @@ drawCol delta board idx =
         ]
 
 
+
+---
+--- Parameters for sizing and coloring connections and the winning path.
+---
+
+
 connectWidth : Int -> Int
 connectWidth delta =
     -- Ensures that the connector is at least as wide as the grid
@@ -374,10 +380,20 @@ connectWidth delta =
     (delta + 48) // 12
 
 
+pathWidth : Int -> Int
+pathWidth delta =
+    connectWidth delta - 4
+
+
 connectColor : String
 connectColor =
     --"white"
     "black"
+
+
+pathColor : String
+pathColor =
+    "white"
 
 
 centers : Int -> Int -> Int -> ( Int, Int )
@@ -422,6 +438,11 @@ drawVertex delta colidx board rowidx =
 connectSizer : Int -> ( Int, String )
 connectSizer delta =
     ( connectWidth delta, connectColor )
+
+
+pathSizer : Int -> ( Int, String )
+pathSizer delta =
+    ( pathWidth delta, pathColor )
 
 
 drawConnections : Int -> Int -> Int -> (Int -> ( Int, String )) -> Board -> List (Svg msg)
@@ -572,11 +593,6 @@ drawDecoration delta decoration =
                 ]
                 []
             ]
-
-
-pathSizer : Int -> ( Int, String )
-pathSizer delta =
-    ( connectWidth delta - 4, "white" )
 
 
 drawPath : Int -> List ( Int, Int ) -> List (Svg msg)
