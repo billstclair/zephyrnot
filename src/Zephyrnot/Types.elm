@@ -51,6 +51,7 @@ type alias SavedModel =
     , chooseFirst : Player
     , player : Player
     , winner : Winner
+    , path : List ( Int, Int )
     , moves : List String
     , board : Board
     }

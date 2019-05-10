@@ -122,6 +122,7 @@ type alias Model =
     , chooseFirst : Player
     , player : Player
     , winner : Winner
+    , path : List ( Int, Int )
     , moves : List String
     , board : Board
     }
@@ -175,6 +176,7 @@ init flags url key =
     , chooseFirst = Zephyrus
     , player = Zephyrus
     , winner = NoWinner
+    , path = []
     , moves = []
     , board = Board.empty
     }
@@ -224,6 +226,7 @@ savedModelToModel savedModel model =
         , chooseFirst = savedModel.chooseFirst
         , player = savedModel.player
         , winner = savedModel.winner
+        , path = savedModel.path
         , moves = savedModel.moves
         , board = savedModel.board
     }
@@ -249,6 +252,7 @@ update msg model =
                 , decoration = NoDecoration
                 , player = Zephyrus
                 , winner = NoWinner
+                , path = []
                 , moves = []
             }
                 |> withNoCmd
@@ -377,8 +381,21 @@ update msg model =
                                         else
                                             otherPlayer model.player
                                 }
+
+                    ( winner, path ) =
+                        Board.winner model.player mdl.board
+
+                    path2 =
+                        if winner == NoWinner then
+                            path
+
+                        else
+                            Debug.log "path" path
                 in
-                { mdl | winner = Board.winner model.player mdl.board }
+                { mdl
+                    | winner = winner
+                    , path = path
+                }
                     |> withNoCmd
 
         WindowResize w h ->
@@ -494,6 +511,7 @@ view model =
                 [ Board.render (boardSize model)
                     Click
                     model.decoration
+                    model.path
                     model.board
                 ]
             , p

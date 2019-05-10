@@ -99,105 +99,108 @@ set row col board =
 
 {-| It might be worthwhile to have an option to increment row or col first.
 -}
-winner : Player -> Board -> Winner
+winner : Player -> Board -> ( Winner, List ( Int, Int ) )
 winner player board =
     let
-        findPath : Int -> Int -> (( Int, Int ) -> Bool) -> Set ( Int, Int ) -> ( Bool, Set ( Int, Int ) )
-        findPath row col done seen =
+        findPath : Int -> Int -> (( Int, Int ) -> Bool) -> Set ( Int, Int ) -> List ( Int, Int ) -> ( Bool, Set ( Int, Int ), List ( Int, Int ) )
+        findPath row col done seen path =
             if done ( row, col ) then
-                ( True, seen )
+                ( True, seen, path )
 
             else if row < 0 || row > 5 || col < 0 || col > 5 then
-                ( False, seen )
+                ( False, seen, path )
 
             else if Set.member ( row, col ) seen then
-                ( False, seen )
+                ( False, seen, path )
 
             else
                 let
                     seen2 =
                         Set.insert ( row, col ) seen
+
+                    path2 =
+                        ( row, col ) :: path
                 in
                 if not <| get row col board then
-                    ( False, seen2 )
+                    ( False, seen2, path )
 
                 else
                     let
-                        ( res3, seen3 ) =
-                            findPath row (col + 1) done seen2
+                        ( res3, seen3, path3 ) =
+                            findPath row (col + 1) done seen2 path2
                     in
                     if res3 then
-                        ( True, seen3 )
+                        ( True, seen3, path3 )
 
                     else
                         let
-                            ( res4, seen4 ) =
-                                findPath (row + 1) col done seen3
+                            ( res4, seen4, path4 ) =
+                                findPath (row + 1) col done seen3 path2
                         in
                         if res4 then
-                            ( True, seen4 )
+                            ( True, seen4, path4 )
 
                         else
                             let
-                                ( res5, seen5 ) =
-                                    findPath row (col - 1) done seen4
+                                ( res5, seen5, path5 ) =
+                                    findPath row (col - 1) done seen4 path2
                             in
                             if res5 then
-                                ( True, seen5 )
+                                ( True, seen5, path5 )
 
                             else
-                                findPath (row - 1) col done seen5
+                                findPath (row - 1) col done seen5 path2
 
         hloop row seen =
             let
-                ( res, seen2 ) =
-                    findPath row 0 (\( _, col ) -> col > 5) seen
+                ( res, seen2, path2 ) =
+                    findPath row 0 (\( _, col ) -> col > 5) seen []
             in
             if res then
-                True
+                ( True, List.reverse path2 )
 
             else if row >= 5 then
-                False
+                ( False, [] )
 
             else
                 hloop (row + 1) seen2
 
         vloop col seen =
             let
-                ( res, seen2 ) =
-                    findPath 0 col (\( row, _ ) -> row > 5) seen
+                ( res, seen2, path2 ) =
+                    findPath 0 col (\( row, _ ) -> row > 5) seen []
             in
             if res then
-                True
+                ( True, List.reverse path2 )
 
             else if col >= 5 then
-                False
+                ( False, [] )
 
             else
                 vloop (col + 1) seen2
     in
     let
-        hwin =
+        ( hwin, hpath ) =
             hloop 0 Set.empty
 
-        vwin =
+        ( vwin, vpath ) =
             vloop 0 Set.empty
     in
     if hwin && vwin then
         if player == Zephyrus then
-            HorizontalWinner
+            ( HorizontalWinner, hpath )
 
         else
-            VerticalWinner
+            ( VerticalWinner, vpath )
 
     else if hwin then
-        HorizontalWinner
+        ( HorizontalWinner, hpath )
 
     else if vwin then
-        VerticalWinner
+        ( VerticalWinner, vpath )
 
     else
-        NoWinner
+        ( NoWinner, [] )
 
 
 tos : Int -> String
@@ -215,8 +218,8 @@ lineWidth =
     lineWidthO2 * 2
 
 
-render : Int -> (( Int, Int ) -> msg) -> Decoration -> Board -> Html msg
-render size tagger decoration board =
+render : Int -> (( Int, Int ) -> msg) -> Decoration -> List ( Int, Int ) -> Board -> Html msg
+render size tagger decoration path board =
     let
         sizeS =
             tos size
@@ -233,6 +236,7 @@ render size tagger decoration board =
             [ [ drawCompass delta ]
             , drawRows delta
             , drawCols delta board
+            , drawPath delta path
             , drawDecoration delta decoration
             , drawClickRects delta tagger
             ]
@@ -376,11 +380,16 @@ connectColor =
     "black"
 
 
+centers : Int -> Int -> Int -> ( Int, Int )
+centers delta rowidx colidx =
+    ( delta * colidx + delta // 2, delta * rowidx + delta // 2 )
+
+
 drawVertex : Int -> Int -> Board -> Int -> List (Svg msg)
 drawVertex delta colidx board rowidx =
     let
         ( xc, yc ) =
-            ( delta * colidx + delta // 2, delta * rowidx + delta // 2 )
+            centers delta rowidx colidx
 
         setp =
             get rowidx colidx board
@@ -405,101 +414,114 @@ drawVertex delta colidx board rowidx =
         []
 
       else
-        let
-            lw =
-                connectWidth delta
+        drawConnections delta rowidx colidx connectSizer board
+    ]
+        |> List.concat
 
-            leftp =
-                get rowidx (colidx - 1) board
 
-            rightp =
-                get rowidx (colidx + 1) board
+connectSizer : Int -> ( Int, String )
+connectSizer delta =
+    ( connectWidth delta, connectColor )
 
-            upp =
-                get (rowidx - 1) colidx board
 
-            downp =
-                get (rowidx + 1) colidx board
+drawConnections : Int -> Int -> Int -> (Int -> ( Int, String )) -> Board -> List (Svg msg)
+drawConnections delta rowidx colidx sizer board =
+    let
+        ( xc, yc ) =
+            centers delta rowidx colidx
 
-            lrOverlap =
-                if upp || downp then
-                    lw // 2
+        ( lw, color ) =
+            sizer delta
 
-                else
-                    0
+        leftp =
+            get rowidx (colidx - 1) board
 
-            udOverlap =
-                if leftp || rightp then
-                    lw // 2
+        rightp =
+            get rowidx (colidx + 1) board
 
-                else
-                    0
+        upp =
+            get (rowidx - 1) colidx board
 
-            xyr =
+        downp =
+            get (rowidx + 1) colidx board
+
+        lrOverlap =
+            if upp || downp then
                 lw // 2
+
+            else
+                0
+
+        udOverlap =
+            if leftp || rightp then
+                lw // 2
+
+            else
+                0
+
+        xyr =
+            lw // 2
+    in
+    [ if not <| leftp || rightp then
+        []
+
+      else
+        let
+            left =
+                if leftp then
+                    xc - delta // 2 - lw // 2
+
+                else
+                    xc - lrOverlap
+
+            right =
+                if rightp then
+                    xc + delta // 2 + lw // 2
+
+                else
+                    xc + lrOverlap
         in
-        [ if not <| leftp || rightp then
-            []
-
-          else
-            let
-                left =
-                    if leftp then
-                        xc - delta // 2 - lw // 2
-
-                    else
-                        xc - lrOverlap
-
-                right =
-                    if rightp then
-                        xc + delta // 2 + lw // 2
-
-                    else
-                        xc + lrOverlap
-            in
-            [ Svg.rect
-                [ x <| tos left
-                , y <| tos (yc - lw // 2)
-                , width <| tos (right - left)
-                , height <| tos lw
-                , strokeWidth "0"
-                , fill connectColor
-                , rx <| tos xyr
-                ]
-                []
+        [ Svg.rect
+            [ x <| tos left
+            , y <| tos (yc - lw // 2)
+            , width <| tos (right - left)
+            , height <| tos lw
+            , strokeWidth "0"
+            , fill color
+            , rx <| tos xyr
             ]
-        , if not <| upp || downp then
             []
-
-          else
-            let
-                top =
-                    if upp then
-                        yc - delta // 2 - lw // 2
-
-                    else
-                        yc - udOverlap
-
-                bottom =
-                    if downp then
-                        yc + delta // 2 + lw // 2
-
-                    else
-                        yc + udOverlap
-            in
-            [ Svg.rect
-                [ x <| tos (xc - lw // 2)
-                , y <| tos top
-                , width <| tos lw
-                , height <| tos (bottom - top)
-                , strokeWidth "0"
-                , fill connectColor
-                , ry <| tos xyr
-                ]
-                []
-            ]
         ]
-            |> List.concat
+    , if not <| upp || downp then
+        []
+
+      else
+        let
+            top =
+                if upp then
+                    yc - delta // 2 - lw // 2
+
+                else
+                    yc - udOverlap
+
+            bottom =
+                if downp then
+                    yc + delta // 2 + lw // 2
+
+                else
+                    yc + udOverlap
+        in
+        [ Svg.rect
+            [ x <| tos (xc - lw // 2)
+            , y <| tos top
+            , width <| tos lw
+            , height <| tos (bottom - top)
+            , strokeWidth "0"
+            , fill color
+            , ry <| tos xyr
+            ]
+            []
+        ]
     ]
         |> List.concat
 
@@ -550,6 +572,21 @@ drawDecoration delta decoration =
                 ]
                 []
             ]
+
+
+pathSizer : Int -> ( Int, String )
+pathSizer delta =
+    ( connectWidth delta - 4, "white" )
+
+
+drawPath : Int -> List ( Int, Int ) -> List (Svg msg)
+drawPath delta path =
+    let
+        board =
+            List.foldl (\( r, c ) b -> set r c b) empty path
+    in
+    List.map (\( r, c ) -> drawConnections delta r c pathSizer board) path
+        |> List.concat
 
 
 rowNameDict : Dict Int String
