@@ -366,7 +366,14 @@ connectWidth : Int -> Int
 connectWidth delta =
     -- Ensures that the connector is at least as wide as the grid
     -- at all screen sizes.
+    --2
     (delta + 48) // 12
+
+
+connectColor : String
+connectColor =
+    --"white"
+    "black"
 
 
 drawVertex : Int -> Int -> Board -> Int -> List (Svg msg)
@@ -413,6 +420,23 @@ drawVertex delta colidx board rowidx =
 
             downp =
                 get (rowidx + 1) colidx board
+
+            lrOverlap =
+                if upp || downp then
+                    lw // 2
+
+                else
+                    0
+
+            udOverlap =
+                if leftp || rightp then
+                    lw // 2
+
+                else
+                    0
+
+            xyr =
+                lw // 2
         in
         [ if not <| leftp || rightp then
             []
@@ -421,25 +445,26 @@ drawVertex delta colidx board rowidx =
             let
                 left =
                     if leftp then
-                        xc - delta // 2
+                        xc - delta // 2 - lw // 2
 
                     else
-                        xc
+                        xc - lrOverlap
 
                 right =
                     if rightp then
-                        xc + delta // 2
+                        xc + delta // 2 + lw // 2
 
                     else
-                        xc
+                        xc + lrOverlap
             in
             [ Svg.rect
                 [ x <| tos left
                 , y <| tos (yc - lw // 2)
                 , width <| tos (right - left)
                 , height <| tos lw
-                , stroke "black"
-                , fill "black"
+                , strokeWidth "0"
+                , fill connectColor
+                , rx <| tos xyr
                 ]
                 []
             ]
@@ -450,25 +475,26 @@ drawVertex delta colidx board rowidx =
             let
                 top =
                     if upp then
-                        yc - delta // 2
+                        yc - delta // 2 - lw // 2
 
                     else
-                        yc
+                        yc - udOverlap
 
                 bottom =
                     if downp then
-                        yc + delta // 2
+                        yc + delta // 2 + lw // 2
 
                     else
-                        yc
+                        yc + udOverlap
             in
             [ Svg.rect
                 [ x <| tos (xc - lw // 2)
                 , y <| tos top
                 , width <| tos lw
                 , height <| tos (bottom - top)
-                , stroke "black"
-                , fill "black"
+                , strokeWidth "0"
+                , fill connectColor
+                , ry <| tos xyr
                 ]
                 []
             ]
@@ -529,17 +555,17 @@ drawDecoration delta decoration =
 rowNameDict : Dict Int String
 rowNameDict =
     Dict.fromList
-        [ ( 0, "f" )
-        , ( 1, "e" )
-        , ( 2, "d" )
-        , ( 3, "c" )
-        , ( 4, "b" )
-        , ( 5, "a" )
+        [ ( 0, "a" )
+        , ( 1, "b" )
+        , ( 2, "c" )
+        , ( 3, "d" )
+        , ( 4, "e" )
+        , ( 5, "f" )
         ]
 
 
-rowToString : Int -> String
-rowToString y =
+colToString : Int -> String
+colToString y =
     case Dict.get y rowNameDict of
         Nothing ->
             String.fromInt y
@@ -548,9 +574,9 @@ rowToString y =
             s
 
 
-colToString : Int -> String
-colToString x =
-    tos <| x + 1
+rowToString : Int -> String
+rowToString x =
+    tos <| 6 - x
 
 
 drawCompass : Int -> Svg msg

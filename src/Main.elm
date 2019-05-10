@@ -402,7 +402,7 @@ update msg model =
 
 cellName : ( Int, Int ) -> String
 cellName ( rowidx, colidx ) =
-    Board.rowToString rowidx ++ Board.colToString colidx
+    Board.colToString colidx ++ Board.rowToString rowidx
 
 
 otherPlayer : Player -> Player
