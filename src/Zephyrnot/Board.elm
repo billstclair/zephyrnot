@@ -11,11 +11,7 @@
 
 
 module Zephyrnot.Board exposing
-    ( Board
-    , Decoration(..)
-    , Player(..)
-    , Winner(..)
-    , colToString
+    ( colToString
     , empty
     , get
     , render
@@ -59,10 +55,14 @@ import Svg.Attributes
         , y2
         )
 import Svg.Events as Events
-
-
-type alias Board =
-    Array (Array Bool)
+import Zephyrnot.Types
+    exposing
+        ( Board
+        , Decoration(..)
+        , Player(..)
+        , SavedModel
+        , Winner(..)
+        )
 
 
 empty : Board
@@ -95,20 +95,6 @@ set row col board =
             Array.set row
                 (Array.set col True r)
                 board
-
-
-type
-    Player
-    -- Choose column
-    = Zephyrus
-      -- Choose row
-    | Notus
-
-
-type Winner
-    = NoWinner
-    | HorizontalWinner
-    | VerticalWinner
 
 
 {-| It might be worthwhile to have an option to increment row or col first.
@@ -227,13 +213,6 @@ lineWidthO2 =
 lineWidth : Int
 lineWidth =
     lineWidthO2 * 2
-
-
-type Decoration
-    = NoDecoration
-    | RowSelectedDecoration Int
-    | ColSelectedDecoration Int
-    | AlreadyFilledDecoration ( Int, Int )
 
 
 render : Int -> (( Int, Int ) -> msg) -> Decoration -> Board -> Html msg

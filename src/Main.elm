@@ -76,6 +76,9 @@ import Html.Attributes as Attributes
 import Html.Events exposing (on, onCheck, onClick, onInput)
 import Json.Decode as JD exposing (Decoder, Value)
 import Json.Encode as JE
+import PortFunnel.LocalStorage as LocalStorage
+import PortFunnel.LocalStorage.Sequence as Sequence exposing (KeyPair)
+import PortFunnels exposing (FunnelDict, Handler(..))
 import Svg exposing (Svg, foreignObject, g, line, rect, svg)
 import Svg.Attributes
     exposing
@@ -101,10 +104,13 @@ import Svg.Events
 import Task
 import Url exposing (Url)
 import Zephyrnot.Board as Board
+import Zephyrnot.EncodeDecode as ED
+import Zephyrnot.Types as Types
     exposing
         ( Board
         , Decoration(..)
         , Player(..)
+        , SavedModel
         , Winner(..)
         )
 
@@ -183,6 +189,44 @@ getViewport viewport =
             viewport.viewport
     in
     WindowResize (round vp.width) (round vp.height)
+
+
+storageHandler : LocalStorage.Response -> PortFunnels.State -> Model -> ( Model, Cmd Msg )
+storageHandler response state model =
+    case response of
+        LocalStorage.GetResponse { label, key, value } ->
+            case key of
+                "model" ->
+                    case value of
+                        Nothing ->
+                            model |> withNoCmd
+
+                        Just v ->
+                            case ED.decodeSavedModel v of
+                                Err _ ->
+                                    model |> withNoCmd
+
+                                Ok savedModel ->
+                                    savedModelToModel savedModel model
+                                        |> withNoCmd
+
+                _ ->
+                    model |> withNoCmd
+
+        _ ->
+            model |> withNoCmd
+
+
+savedModelToModel : SavedModel -> Model -> Model
+savedModelToModel savedModel model =
+    { model
+        | decoration = savedModel.decoration
+        , chooseFirst = savedModel.chooseFirst
+        , player = savedModel.player
+        , winner = savedModel.winner
+        , moves = savedModel.moves
+        , board = savedModel.board
+    }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
