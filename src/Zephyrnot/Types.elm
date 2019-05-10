@@ -25,12 +25,9 @@ type alias Board =
     Array (Array Bool)
 
 
-type
-    Player
-    -- Choose column
-    = Zephyrus
-      -- Choose row
-    | Notus
+type Player
+    = Zephyrus -- Choose column
+    | Notus -- Choose row
 
 
 type Winner

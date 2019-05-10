@@ -137,6 +137,7 @@ type Msg
     | WindowResize Int Int
     | HandleUrlRequest UrlRequest
     | HandleUrlChange Url
+    | ProcessLocalStorage Value
 
 
 main =
@@ -181,7 +182,9 @@ init flags url key =
     , board = Board.empty
     }
         |> withCmds
-            [ Task.perform getViewport Dom.getViewport ]
+            [ Task.perform getViewport Dom.getViewport
+            , get pk.model
+            ]
 
 
 getViewport : Viewport -> Msg
@@ -219,6 +222,18 @@ storageHandler response state model =
             model |> withNoCmd
 
 
+modelToSavedModel : Model -> SavedModel
+modelToSavedModel model =
+    { decoration = model.decoration
+    , chooseFirst = model.chooseFirst
+    , player = model.player
+    , winner = model.winner
+    , path = model.path
+    , moves = model.moves
+    , board = model.board
+    }
+
+
 savedModelToModel : SavedModel -> Model -> Model
 savedModelToModel savedModel model =
     { model
@@ -234,6 +249,19 @@ savedModelToModel savedModel model =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
+    let
+        ( mdl, cmd ) =
+            updateInternal msg model
+    in
+    mdl
+        |> withCmds
+            [ cmd
+            , putModel mdl
+            ]
+
+
+updateInternal : Msg -> Model -> ( Model, Cmd Msg )
+updateInternal msg model =
     case msg of
         Noop ->
             model |> withNoCmd
@@ -416,6 +444,21 @@ update msg model =
         HandleUrlChange url ->
             model |> withNoCmd
 
+        ProcessLocalStorage value ->
+            case
+                PortFunnels.processValue funnelDict
+                    value
+                    funnelState
+                    model
+            of
+                Err error ->
+                    -- Maybe we should display an error here,
+                    -- but I don't think it will ever happen.
+                    model |> withNoCmd
+
+                Ok res ->
+                    res
+
 
 cellName : ( Int, Int ) -> String
 cellName ( rowidx, colidx ) =
@@ -435,6 +478,7 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ Events.onResize WindowResize
+        , PortFunnels.subscriptions ProcessLocalStorage model
         ]
 
 
@@ -685,4 +729,77 @@ chars =
     { leftCurlyQuote = codestr 0x201C
     , copyright = codestr 0xA9
     , nbsp = codestr 0xA0
+    }
+
+
+
+---
+--- Persistence
+---
+
+
+putModel : Model -> Cmd Msg
+putModel model =
+    let
+        savedModel =
+            Debug.log "savedModel" <|
+                modelToSavedModel model
+
+        value =
+            ED.encodeSavedModel savedModel
+    in
+    put pk.model <| Just value
+
+
+put : String -> Maybe Value -> Cmd Msg
+put key value =
+    let
+        k =
+            Debug.log "put" key
+    in
+    localStorageSend (LocalStorage.put key value)
+
+
+get : String -> Cmd Msg
+get key =
+    let
+        k =
+            Debug.log "get" key
+    in
+    localStorageSend (LocalStorage.get key)
+
+
+localStorageSend : LocalStorage.Message -> Cmd Msg
+localStorageSend message =
+    LocalStorage.send (getCmdPort LocalStorage.moduleName ())
+        (Debug.log "send" message)
+        funnelState.storage
+
+
+{-| The `model` parameter is necessary here for `PortFunnels.makeFunnelDict`.
+-}
+getCmdPort : String -> model -> (Value -> Cmd Msg)
+getCmdPort moduleName _ =
+    PortFunnels.getCmdPort ProcessLocalStorage moduleName False
+
+
+localStoragePrefix : String
+localStoragePrefix =
+    "zephyrnot"
+
+
+funnelState : PortFunnels.State
+funnelState =
+    PortFunnels.initialState localStoragePrefix
+
+
+funnelDict : FunnelDict Model Msg
+funnelDict =
+    PortFunnels.makeFunnelDict
+        [ LocalStorageHandler storageHandler ]
+        getCmdPort
+
+
+pk =
+    { model = "model"
     }
