@@ -29,6 +29,7 @@ encodeSavedModel : SavedModel -> Value
 encodeSavedModel model =
     JE.object
         [ ( "decoration", encodeDecoration model.decoration )
+        , ( "firstSelection", encodeDecoration model.firstSelection )
         , ( "chooseFirst", encodePlayer model.chooseFirst )
         , ( "player", encodePlayer model.player )
         , ( "winner", encodeWinner model.winner )
@@ -45,8 +46,9 @@ decodeSavedModel value =
 
 savedModelDecoder : Decoder SavedModel
 savedModelDecoder =
-    JD.map7 SavedModel
+    JD.map8 SavedModel
         (JD.field "decoration" decorationDecoder)
+        (JD.field "firstSelection" decorationDecoder)
         (JD.field "chooseFirst" playerDecoder)
         (JD.field "player" playerDecoder)
         (JD.field "winner" winnerDecoder)

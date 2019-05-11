@@ -118,7 +118,9 @@ import Zephyrnot.Types as Types
 type alias Model =
     { key : Key
     , windowSize : ( Int, Int )
+    , started : Bool
     , decoration : Decoration
+    , firstSelection : Decoration
     , chooseFirst : Player
     , player : Player
     , winner : Winner
@@ -173,7 +175,9 @@ init : Value -> Url -> Key -> ( Model, Cmd Msg )
 init flags url key =
     { key = key
     , windowSize = ( 1024, 768 )
+    , started = False
     , decoration = NoDecoration
+    , firstSelection = NoDecoration
     , chooseFirst = Zephyrus
     , player = Zephyrus
     , winner = NoWinner
@@ -183,7 +187,6 @@ init flags url key =
     }
         |> withCmds
             [ Task.perform getViewport Dom.getViewport
-            , get pk.model
             ]
 
 
@@ -198,33 +201,52 @@ getViewport viewport =
 
 storageHandler : LocalStorage.Response -> PortFunnels.State -> Model -> ( Model, Cmd Msg )
 storageHandler response state model =
+    let
+        mdl =
+            { model
+                | started =
+                    if LocalStorage.isLoaded state.storage then
+                        True
+
+                    else
+                        model.started
+            }
+
+        cmd =
+            if mdl.started && not model.started then
+                get pk.model
+
+            else
+                Cmd.none
+    in
     case response of
         LocalStorage.GetResponse { label, key, value } ->
             case key of
                 "model" ->
                     case value of
                         Nothing ->
-                            model |> withNoCmd
+                            mdl |> withCmd cmd
 
                         Just v ->
-                            case ED.decodeSavedModel v of
-                                Err _ ->
-                                    model |> withNoCmd
+                            case Debug.log "decodeSavedModel" <| ED.decodeSavedModel v of
+                                Err e ->
+                                    mdl |> withCmd cmd
 
                                 Ok savedModel ->
-                                    savedModelToModel savedModel model
-                                        |> withNoCmd
+                                    savedModelToModel savedModel mdl
+                                        |> withCmd cmd
 
                 _ ->
-                    model |> withNoCmd
+                    mdl |> withCmd cmd
 
         _ ->
-            model |> withNoCmd
+            mdl |> withCmd cmd
 
 
 modelToSavedModel : Model -> SavedModel
 modelToSavedModel model =
     { decoration = model.decoration
+    , firstSelection = model.firstSelection
     , chooseFirst = model.chooseFirst
     , player = model.player
     , winner = model.winner
@@ -238,6 +260,7 @@ savedModelToModel : SavedModel -> Model -> Model
 savedModelToModel savedModel model =
     { model
         | decoration = savedModel.decoration
+        , firstSelection = savedModel.firstSelection
         , chooseFirst = savedModel.chooseFirst
         , player = savedModel.player
         , winner = savedModel.winner
@@ -256,7 +279,11 @@ update msg model =
     mdl
         |> withCmds
             [ cmd
-            , putModel mdl
+            , if model.started then
+                putModel mdl
+
+              else
+                Cmd.none
             ]
 
 
@@ -278,6 +305,7 @@ updateInternal msg model =
             { model
                 | board = Board.empty
                 , decoration = NoDecoration
+                , firstSelection = NoDecoration
                 , player = Zephyrus
                 , winner = NoWinner
                 , path = []
@@ -290,141 +318,7 @@ updateInternal msg model =
                 model |> withNoCmd
 
             else
-                let
-                    mdl =
-                        case model.decoration of
-                            NoDecoration ->
-                                { model
-                                    | decoration =
-                                        if model.chooseFirst == Zephyrus then
-                                            ColSelectedDecoration col
-
-                                        else
-                                            RowSelectedDecoration row
-                                }
-
-                            ColSelectedDecoration c ->
-                                let
-                                    filled =
-                                        Board.get row c model.board
-                                in
-                                { model
-                                    | decoration =
-                                        if filled then
-                                            AlreadyFilledDecoration ( row, c )
-
-                                        else
-                                            NoDecoration
-                                    , moves =
-                                        if filled then
-                                            model.moves
-
-                                        else
-                                            cellName ( row, c ) :: model.moves
-                                    , board =
-                                        if filled then
-                                            model.board
-
-                                        else
-                                            Board.set row c model.board
-                                    , player =
-                                        if filled then
-                                            model.player
-
-                                        else
-                                            otherPlayer model.player
-                                }
-
-                            RowSelectedDecoration r ->
-                                let
-                                    filled =
-                                        Board.get r col model.board
-                                in
-                                { model
-                                    | decoration =
-                                        if filled then
-                                            AlreadyFilledDecoration ( r, col )
-
-                                        else
-                                            NoDecoration
-                                    , moves =
-                                        if filled then
-                                            model.moves
-
-                                        else
-                                            cellName ( r, col ) :: model.moves
-                                    , board =
-                                        if filled then
-                                            model.board
-
-                                        else
-                                            Board.set r col model.board
-                                    , player =
-                                        if filled then
-                                            model.player
-
-                                        else
-                                            otherPlayer model.player
-                                }
-
-                            AlreadyFilledDecoration ( r, c ) ->
-                                let
-                                    ( rr, cc ) =
-                                        if model.player == Zephyrus then
-                                            ( r, col )
-
-                                        else
-                                            ( row, c )
-
-                                    filled =
-                                        Board.get rr cc model.board
-                                in
-                                { model
-                                    | decoration =
-                                        if filled then
-                                            AlreadyFilledDecoration ( rr, cc )
-
-                                        else
-                                            NoDecoration
-                                    , moves =
-                                        if filled then
-                                            model.moves
-
-                                        else
-                                            (cellName ( r, c )
-                                                ++ "/"
-                                                ++ cellName ( rr, cc )
-                                            )
-                                                :: model.moves
-                                    , board =
-                                        if filled then
-                                            model.board
-
-                                        else
-                                            Board.set rr cc model.board
-                                    , player =
-                                        if filled then
-                                            model.player
-
-                                        else
-                                            otherPlayer model.player
-                                }
-
-                    ( winner, path ) =
-                        Board.winner model.player mdl.board
-
-                    path2 =
-                        if winner == NoWinner then
-                            path
-
-                        else
-                            Debug.log "path" path
-                in
-                { mdl
-                    | winner = winner
-                    , path = path
-                }
-                    |> withNoCmd
+                doClick row col model
 
         WindowResize w h ->
             { model | windowSize = ( w, h ) }
@@ -458,6 +352,169 @@ updateInternal msg model =
 
                 Ok res ->
                     res
+
+
+doClick : Int -> Int -> Model -> ( Model, Cmd Msg )
+doClick row col model =
+    let
+        makeMove r c =
+            let
+                filled =
+                    Board.get r c model.board
+
+                ( firstSelection, decoration, ( moves, board, player ) ) =
+                    if filled then
+                        ( model.firstSelection
+                        , AlreadyFilledDecoration ( r, c )
+                        , ( model.moves, model.board, model.player )
+                        )
+
+                    else
+                        ( NoDecoration
+                        , NoDecoration
+                        , ( cellName ( r, c ) :: model.moves
+                          , Board.set r c model.board
+                          , otherPlayer model.player
+                          )
+                        )
+            in
+            { model
+                | firstSelection = firstSelection
+                , decoration = decoration
+                , player = player
+                , moves = moves
+                , board = board
+            }
+
+        mdl =
+            case model.firstSelection of
+                ColSelectedDecoration selectedCol ->
+                    case model.decoration of
+                        RowSelectedDecoration selectedRow ->
+                            if row /= selectedRow then
+                                { model
+                                    | decoration =
+                                        RowSelectedDecoration row
+                                }
+
+                            else
+                                makeMove selectedRow selectedCol
+
+                        AlreadyFilledDecoration ( ar, ac ) ->
+                            let
+                                ( r, c ) =
+                                    case model.player of
+                                        Zephyrus ->
+                                            ( ar, col )
+
+                                        Notus ->
+                                            ( row, ac )
+                            in
+                            if Board.get r c model.board then
+                                { model
+                                    | decoration =
+                                        AlreadyFilledDecoration ( r, c )
+                                }
+
+                            else
+                                makeMove r c
+
+                        _ ->
+                            { model
+                                | decoration =
+                                    RowSelectedDecoration row
+                            }
+
+                RowSelectedDecoration selectedRow ->
+                    case model.decoration of
+                        ColSelectedDecoration selectedCol ->
+                            if col /= selectedCol then
+                                { model
+                                    | decoration =
+                                        ColSelectedDecoration col
+                                }
+
+                            else
+                                makeMove selectedRow selectedCol
+
+                        AlreadyFilledDecoration ( ar, ac ) ->
+                            let
+                                ( r, c ) =
+                                    case model.player of
+                                        Zephyrus ->
+                                            ( ar, col )
+
+                                        Notus ->
+                                            ( row, ac )
+                            in
+                            if Board.get r c model.board then
+                                { model
+                                    | decoration =
+                                        AlreadyFilledDecoration ( r, c )
+                                }
+
+                            else
+                                makeMove r c
+
+                        _ ->
+                            { model
+                                | decoration =
+                                    ColSelectedDecoration col
+                            }
+
+                _ ->
+                    case model.decoration of
+                        NoDecoration ->
+                            { model
+                                | decoration =
+                                    if model.chooseFirst == Zephyrus then
+                                        ColSelectedDecoration col
+
+                                    else
+                                        RowSelectedDecoration row
+                            }
+
+                        ColSelectedDecoration c ->
+                            if c == col then
+                                { model
+                                    | decoration =
+                                        NoDecoration
+                                    , firstSelection =
+                                        model.decoration
+                                }
+
+                            else
+                                { model
+                                    | decoration =
+                                        ColSelectedDecoration col
+                                }
+
+                        RowSelectedDecoration r ->
+                            if r == row then
+                                { model
+                                    | decoration =
+                                        NoDecoration
+                                    , firstSelection =
+                                        model.decoration
+                                }
+
+                            else
+                                { model
+                                    | decoration =
+                                        RowSelectedDecoration row
+                                }
+
+                        _ ->
+                            model
+
+        ( winner, path ) =
+            Board.winner model.player mdl.board
+    in
+    { mdl
+        | winner = winner
+        , path = path
+    }
+        |> withNoCmd
 
 
 cellName : ( Int, Int ) -> String
@@ -513,26 +570,60 @@ view model =
                     "Notus wins!"
 
                 NoWinner ->
-                    case model.decoration of
-                        NoDecoration ->
-                            if model.chooseFirst == Zephyrus then
-                                "Zephyrus pick a column"
+                    case model.firstSelection of
+                        RowSelectedDecoration _ ->
+                            case model.decoration of
+                                NoDecoration ->
+                                    "Notus chose. Zephyrus pick a column"
 
-                            else
-                                "Notus pick a row"
+                                AlreadyFilledDecoration _ ->
+                                    case model.player of
+                                        Zephyrus ->
+                                            "Zephyrus pick another column"
+
+                                        Notus ->
+                                            "Notus pick another row"
+
+                                _ ->
+                                    "Notus chose. Zephyrus confirm or pick another column"
 
                         ColSelectedDecoration _ ->
-                            "Notus pick a row"
+                            case model.decoration of
+                                NoDecoration ->
+                                    "Zephyrus chose. Notus pick a row"
 
-                        RowSelectedDecoration _ ->
-                            "Zephyrus pick a column"
+                                AlreadyFilledDecoration _ ->
+                                    case model.player of
+                                        Zephyrus ->
+                                            "Zephyrus pick another column"
 
-                        AlreadyFilledDecoration _ ->
-                            if model.player == Zephyrus then
-                                "Zephyrus pick another column"
+                                        Notus ->
+                                            "Notus pick another row"
 
-                            else
-                                "Notus pick another row"
+                                _ ->
+                                    "Zephyrus chose. Notus confirm or pick another row"
+
+                        _ ->
+                            case model.decoration of
+                                NoDecoration ->
+                                    if model.chooseFirst == Zephyrus then
+                                        "Zephyrus pick a column"
+
+                                    else
+                                        "Notus pick a row"
+
+                                ColSelectedDecoration _ ->
+                                    "Zephyrus confirm selection or pick another column"
+
+                                RowSelectedDecoration _ ->
+                                    "Notus confirm selection or pick another row"
+
+                                AlreadyFilledDecoration _ ->
+                                    if model.player == Zephyrus then
+                                        "Zephyrus pick another column"
+
+                                    else
+                                        "Notus pick another row"
     in
     { title = "ZEPHYRNOT"
     , body =
@@ -742,8 +833,7 @@ putModel : Model -> Cmd Msg
 putModel model =
     let
         savedModel =
-            Debug.log "savedModel" <|
-                modelToSavedModel model
+            modelToSavedModel model
 
         value =
             ED.encodeSavedModel savedModel
@@ -753,26 +843,18 @@ putModel model =
 
 put : String -> Maybe Value -> Cmd Msg
 put key value =
-    let
-        k =
-            Debug.log "put" key
-    in
     localStorageSend (LocalStorage.put key value)
 
 
 get : String -> Cmd Msg
 get key =
-    let
-        k =
-            Debug.log "get" key
-    in
     localStorageSend (LocalStorage.get key)
 
 
 localStorageSend : LocalStorage.Message -> Cmd Msg
 localStorageSend message =
     LocalStorage.send (getCmdPort LocalStorage.moduleName ())
-        (Debug.log "send" message)
+        message
         funnelState.storage
 
 

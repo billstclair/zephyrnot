@@ -45,6 +45,7 @@ type Decoration
 
 type alias SavedModel =
     { decoration : Decoration
+    , firstSelection : Decoration
     , chooseFirst : Player
     , player : Player
     , winner : Winner

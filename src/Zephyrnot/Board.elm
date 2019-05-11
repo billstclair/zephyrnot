@@ -712,6 +712,7 @@ drawCompass delta =
                     [ points <|
                         (connection ++ " ")
                             ++ (tos innerX ++ "," ++ tos innerX ++ " ")
+                            -- Should really compute "1" here
                             ++ (tos (shortX + shorterX) ++ "," ++ tos shortX ++ " ")
                             ++ connection
                     ]
