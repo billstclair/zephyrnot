@@ -104,7 +104,7 @@ import Svg.Button as SB exposing (Button, Content(..))
 import Svg.Events
 import Task
 import Url exposing (Url)
-import Zephyrnot.Board as Board
+import Zephyrnot.Board as Board exposing (SizerKind(..))
 import Zephyrnot.EncodeDecode as ED
 import Zephyrnot.Types as Types
     exposing
@@ -722,6 +722,7 @@ mainPage bsize model =
     div [ align "center" ]
         [ Board.render bsize
             Click
+            (Just <| Board.getSizer DefaultSizer)
             model.decoration
             model.path
             model.board
@@ -757,7 +758,7 @@ mainPage bsize model =
 
               else
                 span []
-                    [ text "Stone Placer: "
+                    [ b "Stone Placer: "
                     , text <|
                         case model.player of
                             Zephyrus ->
@@ -767,7 +768,7 @@ mainPage bsize model =
                                 "Notus"
                     ]
             , br
-            , text "Choose first: "
+            , b "Choose first: "
             , radio "choose"
                 "Zephyrus"
                 (model.chooseFirst == Zephyrus)

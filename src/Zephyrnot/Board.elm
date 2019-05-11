@@ -11,10 +11,12 @@
 
 
 module Zephyrnot.Board exposing
-    ( colToString
+    ( SizerKind(..)
+    , colToString
     , count
     , empty
     , get
+    , getSizer
     , render
     , rowToString
     , score
@@ -25,6 +27,7 @@ module Zephyrnot.Board exposing
 import Array exposing (Array)
 import Dict exposing (Dict)
 import Html exposing (Html)
+import List.Extra as LE
 import Set exposing (Set)
 import Svg exposing (Attribute, Svg, foreignObject, g, line, rect, svg)
 import Svg.Attributes
@@ -234,8 +237,82 @@ lineWidth =
     lineWidthO2 * 2
 
 
-render : Int -> (( Int, Int ) -> msg) -> Decoration -> List ( Int, Int ) -> Board -> Html msg
-render size tagger decoration path board =
+connectSizer : Int -> ( Int, String )
+connectSizer delta =
+    ( connectWidth delta, connectColor )
+
+
+pathSizer : Int -> ( Int, String )
+pathSizer delta =
+    ( pathWidth delta, pathColor )
+
+
+type alias Sizer =
+    { connect : Int -> ( Int, String )
+    , path : Int -> ( Int, String )
+    }
+
+
+wideSizer : Sizer
+wideSizer =
+    Sizer connectSizer pathSizer
+
+
+narrowSizer : Sizer
+narrowSizer =
+    { connect = \_ -> ( 2, "black" )
+    , path = \_ -> ( 2, "orange" )
+    }
+
+
+type SizerKind
+    = DefaultSizer
+    | WideSizer
+
+
+sizerKinds : List ( SizerKind, Sizer )
+sizerKinds =
+    [ ( DefaultSizer, narrowSizer )
+    , ( WideSizer, wideSizer )
+    ]
+
+
+getSizer : SizerKind -> Sizer
+getSizer kind =
+    case LE.find (\( k, s ) -> k == kind) sizerKinds of
+        Nothing ->
+            narrowSizer
+
+        Just ( _, s ) ->
+            s
+
+
+getConnectSizer : Maybe Sizer -> (Int -> ( Int, String ))
+getConnectSizer sizer =
+    (case sizer of
+        Nothing ->
+            getSizer DefaultSizer
+
+        Just s ->
+            s
+    )
+        |> .connect
+
+
+getPathSizer : Maybe Sizer -> (Int -> ( Int, String ))
+getPathSizer sizer =
+    (case sizer of
+        Nothing ->
+            getSizer DefaultSizer
+
+        Just s ->
+            s
+    )
+        |> .path
+
+
+render : Int -> (( Int, Int ) -> msg) -> Maybe Sizer -> Decoration -> List ( Int, Int ) -> Board -> Html msg
+render size tagger sizer decoration path board =
     let
         sizeS =
             tos size
@@ -251,8 +328,8 @@ render size tagger decoration path board =
         List.concat
             [ [ drawCompass delta ]
             , drawRows delta
-            , drawCols delta board
-            , drawPath delta path
+            , drawCols delta sizer board
+            , drawPath delta sizer path
             , drawDecoration delta decoration
             , drawClickRects delta tagger
             ]
@@ -341,14 +418,14 @@ drawClickRect delta tagger rowidx colidx =
         []
 
 
-drawCols : Int -> Board -> List (Svg msg)
-drawCols delta board =
-    List.map (drawCol delta board) [ 0, 1, 2, 3, 4, 5 ]
+drawCols : Int -> Maybe Sizer -> Board -> List (Svg msg)
+drawCols delta sizer board =
+    List.map (drawCol delta sizer board) [ 0, 1, 2, 3, 4, 5 ]
         |> List.concat
 
 
-drawCol : Int -> Board -> Int -> List (Svg msg)
-drawCol delta board idx =
+drawCol : Int -> Maybe Sizer -> Board -> Int -> List (Svg msg)
+drawCol delta sizer board idx =
     let
         xc =
             delta * idx + delta // 2
@@ -377,7 +454,7 @@ drawCol delta board idx =
                 ]
                 [ Svg.text <| colToString idx ]
           ]
-        , List.map (drawVertex delta idx board) [ 0, 1, 2, 3, 4, 5 ]
+        , List.map (drawVertex delta sizer idx board) [ 0, 1, 2, 3, 4, 5 ]
             |> List.concat
         ]
 
@@ -417,8 +494,8 @@ centers delta rowidx colidx =
     ( delta * colidx + delta // 2, delta * rowidx + delta // 2 )
 
 
-drawVertex : Int -> Int -> Board -> Int -> List (Svg msg)
-drawVertex delta colidx board rowidx =
+drawVertex : Int -> Maybe Sizer -> Int -> Board -> Int -> List (Svg msg)
+drawVertex delta sizer colidx board rowidx =
     let
         ( xc, yc ) =
             centers delta rowidx colidx
@@ -446,19 +523,9 @@ drawVertex delta colidx board rowidx =
         []
 
       else
-        drawConnections delta rowidx colidx connectSizer board
+        drawConnections delta rowidx colidx (getConnectSizer sizer) board
     ]
         |> List.concat
-
-
-connectSizer : Int -> ( Int, String )
-connectSizer delta =
-    ( connectWidth delta, connectColor )
-
-
-pathSizer : Int -> ( Int, String )
-pathSizer delta =
-    ( pathWidth delta, pathColor )
 
 
 drawConnections : Int -> Int -> Int -> (Int -> ( Int, String )) -> Board -> List (Svg msg)
@@ -611,13 +678,16 @@ drawDecoration delta decoration =
             ]
 
 
-drawPath : Int -> List ( Int, Int ) -> List (Svg msg)
-drawPath delta path =
+drawPath : Int -> Maybe Sizer -> List ( Int, Int ) -> List (Svg msg)
+drawPath delta sizer path =
     let
         board =
             List.foldl (\( r, c ) b -> set r c b) empty path
+
+        psizer =
+            getPathSizer sizer
     in
-    List.map (\( r, c ) -> drawConnections delta r c pathSizer board) path
+    List.map (\( r, c ) -> drawConnections delta r c psizer board) path
         |> List.concat
 
 
