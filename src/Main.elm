@@ -652,13 +652,16 @@ mainPage bsize model =
         score =
             model.score
 
+        count =
+            Board.count model.board
+
         message =
             case model.winner of
                 HorizontalWinner ->
-                    "Zephyrus wins!"
+                    "Zephyrus wins in " ++ String.fromInt count ++ "!"
 
                 VerticalWinner ->
-                    "Notus wins!"
+                    "Notus wins in " ++ String.fromInt count ++ "!"
 
                 NoWinner ->
                     case model.firstSelection of
