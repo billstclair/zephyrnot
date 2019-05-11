@@ -174,7 +174,7 @@ initializeBoard board =
 init : Value -> Url -> Key -> ( Model, Cmd Msg )
 init flags url key =
     { key = key
-    , windowSize = ( 1024, 768 )
+    , windowSize = ( 0, 0 )
     , started = False
     , decoration = NoDecoration
     , firstSelection = NoDecoration
@@ -561,6 +561,9 @@ herculanumStyle =
 view : Model -> Document Msg
 view model =
     let
+        bsize =
+            boardSize model
+
         message =
             case model.winner of
                 HorizontalWinner ->
@@ -613,10 +616,10 @@ view model =
                                         "Notus pick a row"
 
                                 ColSelectedDecoration _ ->
-                                    "Zephyrus confirm selection or pick another column"
+                                    "Zephyrus confirm or pick another column"
 
                                 RowSelectedDecoration _ ->
-                                    "Notus confirm selection or pick another row"
+                                    "Notus confirm or pick another row"
 
                                 AlreadyFilledDecoration _ ->
                                     if model.player == Zephyrus then
@@ -642,87 +645,93 @@ view model =
                 [ text "Feud of the Winds" ]
             , p [ style "margin" "0" ]
                 [ text "Invented by Chris St. Clair" ]
-            , p []
-                [ Board.render (boardSize model)
-                    Click
-                    model.decoration
-                    model.path
-                    model.board
-                ]
-            , p
-                []
-                [ span
-                    [ style "color"
-                        (if model.winner == NoWinner then
-                            "red"
+            , if bsize == 0 then
+                text ""
 
-                         else
-                            "orange"
-                        )
-                    , style "font-weight"
-                        (if model.winner == NoWinner then
-                            "normal"
-
-                         else
-                            "bold"
-                        )
-                    , style "font-size"
-                        (if model.winner == NoWinner then
-                            "100%"
-
-                         else
-                            "120%"
-                        )
-                    ]
-                    [ text message ]
-                , br
-                , if model.winner /= NoWinner then
-                    text ""
-
-                  else
-                    span []
-                        [ text "Stone Placer: "
-                        , text <|
-                            case model.player of
-                                Zephyrus ->
-                                    "Zephyrus"
-
-                                Notus ->
-                                    "Notus"
+              else
+                div []
+                    [ p []
+                        [ Board.render bsize
+                            Click
+                            model.decoration
+                            model.path
+                            model.board
                         ]
-                , br
-                , text "Choose first: "
-                , radio "choose"
-                    "Zephyrus"
-                    (model.chooseFirst == Zephyrus)
-                    (SetChooseFirst Zephyrus)
-                , text " "
-                , radio "choose"
-                    "Notus"
-                    (model.chooseFirst == Notus)
-                    (SetChooseFirst Notus)
-                , br
-                , button
-                    [ onClick NewGame ]
-                    [ text "New Game" ]
-                ]
-            , p []
-                [ text "Moves: "
-                , text <| movesToString (List.reverse model.moves)
-                ]
-            , p []
-                [ a
-                    [ href "Zephyrnot.pdf"
-                    , target "_blank"
+                    , p
+                        []
+                        [ span
+                            [ style "color"
+                                (if model.winner == NoWinner then
+                                    "red"
+
+                                 else
+                                    "orange"
+                                )
+                            , style "font-weight"
+                                (if model.winner == NoWinner then
+                                    "normal"
+
+                                 else
+                                    "bold"
+                                )
+                            , style "font-size"
+                                (if model.winner == NoWinner then
+                                    "100%"
+
+                                 else
+                                    "120%"
+                                )
+                            ]
+                            [ text message ]
+                        , br
+                        , if model.winner /= NoWinner then
+                            text ""
+
+                          else
+                            span []
+                                [ text "Stone Placer: "
+                                , text <|
+                                    case model.player of
+                                        Zephyrus ->
+                                            "Zephyrus"
+
+                                        Notus ->
+                                            "Notus"
+                                ]
+                        , br
+                        , text "Choose first: "
+                        , radio "choose"
+                            "Zephyrus"
+                            (model.chooseFirst == Zephyrus)
+                            (SetChooseFirst Zephyrus)
+                        , text " "
+                        , radio "choose"
+                            "Notus"
+                            (model.chooseFirst == Notus)
+                            (SetChooseFirst Notus)
+                        , br
+                        , button
+                            [ onClick NewGame ]
+                            [ text "New Game" ]
+                        ]
+                    , p []
+                        [ text "Moves: "
+                        , text <| movesToString (List.reverse model.moves)
+                        ]
+                    , p []
+                        [ a
+                            [ href "Zephyrnot.pdf"
+                            , target "_blank"
+                            ]
+                            [ text "Instructions" ]
+                        , br
+                        , a
+                            [ href "https://github.com/billstclair/zephyrnot/"
+                            , target "_blank"
+                            ]
+                            [ text "GitHub" ]
+                        ]
                     ]
-                    [ text "Instructions" ]
-                , br
-                , a
-                    [ href "https://github.com/billstclair/zephyrnot/"
-                    , target "_blank"
-                    ]
-                    [ text "GitHub" ]
-                ]
             ]
         ]
     }
