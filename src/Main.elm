@@ -76,6 +76,7 @@ import Html.Attributes as Attributes
 import Html.Events exposing (on, onCheck, onClick, onInput)
 import Json.Decode as JD exposing (Decoder, Value)
 import Json.Encode as JE
+import Markdown
 import PortFunnel.LocalStorage as LocalStorage
 import PortFunnel.LocalStorage.Sequence as Sequence exposing (KeyPair)
 import PortFunnels exposing (FunnelDict, Handler(..))
@@ -109,6 +110,7 @@ import Zephyrnot.Types as Types
     exposing
         ( Board
         , Decoration(..)
+        , Page(..)
         , Player(..)
         , SavedModel
         , Winner(..)
@@ -119,6 +121,7 @@ type alias Model =
     { key : Key
     , windowSize : ( Int, Int )
     , started : Bool
+    , page : Page
     , decoration : Decoration
     , firstSelection : Decoration
     , chooseFirst : Player
@@ -134,6 +137,7 @@ type Msg
     = Noop
     | SetDecoration Decoration
     | SetChooseFirst Player
+    | SetPage Page
     | NewGame
     | Click ( Int, Int )
     | WindowResize Int Int
@@ -176,6 +180,7 @@ init flags url key =
     { key = key
     , windowSize = ( 0, 0 )
     , started = False
+    , page = MainPage
     , decoration = NoDecoration
     , firstSelection = NoDecoration
     , chooseFirst = Zephyrus
@@ -245,7 +250,8 @@ storageHandler response state model =
 
 modelToSavedModel : Model -> SavedModel
 modelToSavedModel model =
-    { decoration = model.decoration
+    { page = model.page
+    , decoration = model.decoration
     , firstSelection = model.firstSelection
     , chooseFirst = model.chooseFirst
     , player = model.player
@@ -259,7 +265,8 @@ modelToSavedModel model =
 savedModelToModel : SavedModel -> Model -> Model
 savedModelToModel savedModel model =
     { model
-        | decoration = savedModel.decoration
+        | page = savedModel.page
+        , decoration = savedModel.decoration
         , firstSelection = savedModel.firstSelection
         , chooseFirst = savedModel.chooseFirst
         , player = savedModel.player
@@ -299,6 +306,10 @@ updateInternal msg model =
 
         SetChooseFirst player ->
             { model | chooseFirst = player }
+                |> withNoCmd
+
+        SetPage page ->
+            { model | page = page }
                 |> withNoCmd
 
         NewGame ->
@@ -563,7 +574,47 @@ view model =
     let
         bsize =
             boardSize model
+    in
+    { title = "ZEPHYRNOT"
+    , body =
+        [ if bsize == 0 then
+            text ""
 
+          else
+            div []
+                [ div
+                    [ align "center"
+                    ]
+                    [ h1
+                        [ style "margin" "0 0 0.2em 0"
+                        , herculanumStyle
+                        ]
+                        [ text "Zephyrnot" ]
+                    , h2
+                        [ style "margin" "0 0 0.2em 0"
+                        , herculanumStyle
+                        ]
+                        [ text "Feud of the Winds" ]
+                    , p [ style "margin" "0" ]
+                        [ text "Invented by Chris St. Clair" ]
+                    ]
+                , case model.page of
+                    MainPage ->
+                        mainPage bsize model
+
+                    RulesPage ->
+                        rulesPage bsize model
+
+                    InstructionsPage ->
+                        instructionsPage bsize model
+                ]
+        ]
+    }
+
+
+mainPage : Int -> Model -> Html Msg
+mainPage bsize model =
+    let
         message =
             case model.winner of
                 HorizontalWinner ->
@@ -628,111 +679,93 @@ view model =
                                     else
                                         "Notus pick another row"
     in
-    { title = "ZEPHYRNOT"
-    , body =
-        [ if bsize == 0 then
-            text ""
+    div [ align "center" ]
+        [ Board.render bsize
+            Click
+            model.decoration
+            model.path
+            model.board
+        , p
+            []
+            [ span
+                [ style "color"
+                    (if model.winner == NoWinner then
+                        "red"
 
-          else
-            div
-                [ align "center"
+                     else
+                        "orange"
+                    )
+                , style "font-weight"
+                    (if model.winner == NoWinner then
+                        "normal"
+
+                     else
+                        "bold"
+                    )
+                , style "font-size"
+                    (if model.winner == NoWinner then
+                        "100%"
+
+                     else
+                        "120%"
+                    )
                 ]
-                [ h1
-                    [ style "margin" "0 0 0.2em 0"
-                    , herculanumStyle
-                    ]
-                    [ text "Zephyrnot" ]
-                , h2
-                    [ style "margin" "0 0 0.2em 0"
-                    , herculanumStyle
-                    ]
-                    [ text "Feud of the Winds" ]
-                , p [ style "margin" "0" ]
-                    [ text "Invented by Chris St. Clair" ]
-                , p []
-                    [ Board.render bsize
-                        Click
-                        model.decoration
-                        model.path
-                        model.board
-                    ]
-                , p
-                    []
-                    [ span
-                        [ style "color"
-                            (if model.winner == NoWinner then
-                                "red"
+                [ text message ]
+            , br
+            , if model.winner /= NoWinner then
+                text ""
 
-                             else
-                                "orange"
-                            )
-                        , style "font-weight"
-                            (if model.winner == NoWinner then
-                                "normal"
+              else
+                span []
+                    [ text "Stone Placer: "
+                    , text <|
+                        case model.player of
+                            Zephyrus ->
+                                "Zephyrus"
 
-                             else
-                                "bold"
-                            )
-                        , style "font-size"
-                            (if model.winner == NoWinner then
-                                "100%"
-
-                             else
-                                "120%"
-                            )
-                        ]
-                        [ text message ]
-                    , br
-                    , if model.winner /= NoWinner then
-                        text ""
-
-                      else
-                        span []
-                            [ text "Stone Placer: "
-                            , text <|
-                                case model.player of
-                                    Zephyrus ->
-                                        "Zephyrus"
-
-                                    Notus ->
-                                        "Notus"
-                            ]
-                    , br
-                    , text "Choose first: "
-                    , radio "choose"
-                        "Zephyrus"
-                        (model.chooseFirst == Zephyrus)
-                        (SetChooseFirst Zephyrus)
-                    , text " "
-                    , radio "choose"
-                        "Notus"
-                        (model.chooseFirst == Notus)
-                        (SetChooseFirst Notus)
-                    , br
-                    , button
-                        [ onClick NewGame ]
-                        [ text "New Game" ]
+                            Notus ->
+                                "Notus"
                     ]
-                , p []
-                    [ text "Moves: "
-                    , text <| movesToString (List.reverse model.moves)
-                    ]
-                , p []
-                    [ a
-                        [ href "Zephyrnot.pdf"
-                        , target "_blank"
-                        ]
-                        [ text "Instructions" ]
-                    , br
-                    , a
-                        [ href "https://github.com/billstclair/zephyrnot/"
-                        , target "_blank"
-                        ]
-                        [ text "GitHub" ]
-                    ]
+            , br
+            , text "Choose first: "
+            , radio "choose"
+                "Zephyrus"
+                (model.chooseFirst == Zephyrus)
+                (SetChooseFirst Zephyrus)
+            , text " "
+            , radio "choose"
+                "Notus"
+                (model.chooseFirst == Notus)
+                (SetChooseFirst Notus)
+            , br
+            , button
+                [ onClick NewGame ]
+                [ text "New Game" ]
+            ]
+        , p []
+            [ text "Moves: "
+            , text <| movesToString (List.reverse model.moves)
+            ]
+        , p []
+            [ a
+                [ href "#"
+                , onClick <| SetPage InstructionsPage
                 ]
+                [ text "Instructions" ]
+            , text " "
+            , a
+                [ href "#"
+                , onClick <| SetPage RulesPage
+                ]
+                [ text "Rules" ]
+            , br
+            , a
+                [ href "https://github.com/billstclair/zephyrnot/"
+                , target "_blank"
+                ]
+                [ text "GitHub" ]
+            ]
         ]
-    }
 
 
 pairup : List String -> List ( String, String )
@@ -761,12 +794,12 @@ movesToString moves =
 
 
 pairToString : ( String, String ) -> String
-pairToString ( a, b ) =
-    if b == "" then
-        a
+pairToString ( s1, s2 ) =
+    if s2 == "" then
+        s1
 
     else
-        "(" ++ a ++ "," ++ chars.nbsp ++ b ++ ")"
+        "(" ++ s1 ++ "," ++ chars.nbsp ++ s2 ++ ")"
 
 
 
@@ -816,6 +849,165 @@ radio group name isChecked msg =
             []
         , text name
         ]
+
+
+rulesDiv : Bool -> List (Html Msg) -> Html Msg
+rulesDiv alignCenter body =
+    div
+        [ style "width" "25em"
+        , if alignCenter then
+            align "center"
+
+          else
+            style "margin" "auto"
+        ]
+        body
+
+
+playButton : Html Msg
+playButton =
+    rulesDiv True
+        [ button
+            [ onClick <| SetPage MainPage
+            , style "font-size" "110%"
+            ]
+            [ text "Play" ]
+        ]
+
+
+instructionsPage : Int -> Model -> Html Msg
+instructionsPage bsize model =
+    rulesDiv False
+        [ br
+        , playButton
+        , rulesDiv True
+            [ br, b "Instructions" ]
+        , rulesDiv False
+            [ Markdown.toHtml [] """
+The players must choose who will be Zephyrus, placing the first stone,
+and attempting to create a path connecting the east and west
+edges, and who will be Notus, placing the second stone, and attempting
+to create a path connecting the north and south edges.
+
+Zephyrus taps a column to select it, then taps another column to
+change the selection, or the same column again to choose it.
+
+Notus taps a row to select it, then taps another row to
+change the selection, or the same column again to choose it.
+
+After both players have made their selection, the stone at the
+intersection of the selected row and column is placed. If there is
+already a stone there, it is highlighted in red, and the player
+placing the stone must choose another row or column that is
+unoccupied.
+
+Play continues until there is a path connecting two opposite
+edges. Click the "New Game" button to play again.
+
+In non-networked play, the "Choose first" radio buttons control which
+player chooses a row or column first for each stone placement. This is
+amenable to using a portable device (e.g. a smart phone or tablet),
+and passing it back and forth to make selections.
+"""
+            ]
+        , playButton
+        ]
+
+
+rulesPage : Int -> Model -> Html Msg
+rulesPage bsize model =
+    rulesDiv False
+        [ br
+        , playButton
+        , rulesDiv True
+            [ br, b "Rules" ]
+        , rulesDiv False
+            [ Markdown.toHtml [] """ 
+One player is "placing the stone" on each round. Zephyrus starts, and
+play alternates between Zephyrus and Notus. Zephyrus controls the west
+wind, the left edge of the board. Notus controls the south wind, the
+bottom edge of the board.
+
+Each round, players simultaneously and secretly declare the rank or
+file (row or column) they want the next stone to be placed
+on. Zephyrus chooses the file ("a" being furthest west, and "f" being
+furthest east), and Notus chooses the rank (1 being furthest south,
+and 6 being furthest north).
+
+If players declare an occupied point, the player placing the stone
+must change their choice to declare an empty point instead (their
+opponent’s declared choice remains the same).
+
+Each player is trying to connect their edge of the board to its
+opposite edge with an unbroken path of orthogonally adjacent stones
+(west to east or south to north). The first player to do so wins. The
+path does not need to be a straight line. If a path is made between
+all 4 sides on the same turn, the player who placed the final stone
+wins.
+"""
+            ]
+        , playButton
+        , rulesDiv False
+            [ h2 [ herculanumStyle, align "center" ]
+                [ text "The Anemoi: Zephyrus and Notus" ]
+            , Markdown.toHtml []
+                """
+In Greek mythology, the sibling gods the Anemoi personify the winds of the cardinal
+directions. They bring the changing of the weather and seasons and control many
+aspects of daily life.
+
+Zephyrus, the beneficial god of the west wind, brings gentle rains and warm breezes,
+heralding spring and the blooming of the land.
+
+Notus, the tempestuous god of the south wind, brings thick mists and summer storms,
+concealing thieves and destroying crops.
+
+Their brothers Boreas and Eurus are the north winter wind and the unlucky east wind,
+respectively.
+
+In Zephyrnot, players take the rolls of Zephyrus and Notus, vying for control of the
+prevailing winds of Greece. But while you may have power over the winds from your
+compass point, take care: your opponent’s hidden gusts will directly affect your every
+move. Will you be able to predict the wind?
+"""
+            ]
+        , rulesDiv True
+            [ h2 [ herculanumStyle, align "center" ]
+                [ text "Pronunciation" ]
+            , p
+                []
+                [ text "Zephyrnot ["
+                , b "zef"
+                , text "-er-noht]"
+                , br
+                , text "Anemoi ["
+                , b "an"
+                , text "-em-oy]"
+                , br
+                , text "Zephyrus ["
+                , b "zef"
+                , text "-er-uh s]"
+                , br
+                , text "Notus ["
+                , b "noh"
+                , text "-tuh s]"
+                , br
+                , text "Boreas ["
+                , b "bawr"
+                , text "-ee-uh s]"
+                , br
+                , text "Eurus ["
+                , b "yoor"
+                , text "-uh s]"
+                ]
+            ]
+        , playButton
+        ]
+
+
+b : String -> Html msg
+b s =
+    Html.b [] [ text s ]
 
 
 codestr : Int -> String

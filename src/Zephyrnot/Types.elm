@@ -13,6 +13,7 @@
 module Zephyrnot.Types exposing
     ( Board
     , Decoration(..)
+    , Page(..)
     , Player(..)
     , SavedModel
     , Winner(..)
@@ -43,8 +44,15 @@ type Decoration
     | AlreadyFilledDecoration ( Int, Int )
 
 
+type Page
+    = MainPage
+    | RulesPage
+    | InstructionsPage
+
+
 type alias SavedModel =
-    { decoration : Decoration
+    { page : Page
+    , decoration : Decoration
     , firstSelection : Decoration
     , chooseFirst : Player
     , player : Player

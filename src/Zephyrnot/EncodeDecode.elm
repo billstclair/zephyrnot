@@ -14,11 +14,13 @@ module Zephyrnot.EncodeDecode exposing (decodeSavedModel, encodeSavedModel)
 
 import Array exposing (Array)
 import Json.Decode as JD exposing (Decoder)
+import Json.Decode.Pipeline as DP exposing (optional, required)
 import Json.Encode as JE exposing (Value)
 import Zephyrnot.Types
     exposing
         ( Board
         , Decoration(..)
+        , Page(..)
         , Player(..)
         , SavedModel
         , Winner(..)
@@ -28,7 +30,8 @@ import Zephyrnot.Types
 encodeSavedModel : SavedModel -> Value
 encodeSavedModel model =
     JE.object
-        [ ( "decoration", encodeDecoration model.decoration )
+        [ ( "page", encodePage model.page )
+        , ( "decoration", encodeDecoration model.decoration )
         , ( "firstSelection", encodeDecoration model.firstSelection )
         , ( "chooseFirst", encodePlayer model.chooseFirst )
         , ( "player", encodePlayer model.player )
@@ -46,15 +49,50 @@ decodeSavedModel value =
 
 savedModelDecoder : Decoder SavedModel
 savedModelDecoder =
-    JD.map8 SavedModel
-        (JD.field "decoration" decorationDecoder)
-        (JD.field "firstSelection" decorationDecoder)
-        (JD.field "chooseFirst" playerDecoder)
-        (JD.field "player" playerDecoder)
-        (JD.field "winner" winnerDecoder)
-        (JD.field "path" <| JD.list intPairDecoder)
-        (JD.field "moves" <| JD.list JD.string)
-        (JD.field "board" boardDecoder)
+    JD.succeed SavedModel
+        |> optional "page" pageDecoder MainPage
+        |> required "decoration" decorationDecoder
+        |> required "firstSelection" decorationDecoder
+        |> required "chooseFirst" playerDecoder
+        |> required "player" playerDecoder
+        |> required "winner" winnerDecoder
+        |> required "path" (JD.list intPairDecoder)
+        |> required "moves" (JD.list JD.string)
+        |> required "board" boardDecoder
+
+
+encodePage : Page -> Value
+encodePage page =
+    JE.string <|
+        case page of
+            MainPage ->
+                "MainPage"
+
+            RulesPage ->
+                "RulesPage"
+
+            InstructionsPage ->
+                "InstructionsPage"
+
+
+pageDecoder : Decoder Page
+pageDecoder =
+    JD.string
+        |> JD.andThen
+            (\s ->
+                case s of
+                    "MainPage" ->
+                        JD.succeed MainPage
+
+                    "RulesPage" ->
+                        JD.succeed RulesPage
+
+                    "InstructionsPage" ->
+                        JD.succeed InstructionsPage
+
+                    _ ->
+                        JD.fail <| "Unknown page: " ++ s
+            )
 
 
 encodeDecoration : Decoration -> Value
