@@ -16,13 +16,14 @@ import Array exposing (Array)
 import Json.Decode as JD exposing (Decoder)
 import Json.Decode.Pipeline as DP exposing (optional, required)
 import Json.Encode as JE exposing (Value)
-import Zephyrnot.Types
+import Zephyrnot.Types as Types
     exposing
         ( Board
         , Decoration(..)
         , Page(..)
         , Player(..)
         , SavedModel
+        , Score
         , Winner(..)
         )
 
@@ -39,6 +40,7 @@ encodeSavedModel model =
         , ( "path", JE.list encodeIntPair model.path )
         , ( "moves", JE.list JE.string model.moves )
         , ( "board", encodeBoard model.board )
+        , ( "score", encodeScore model.score )
         ]
 
 
@@ -59,6 +61,7 @@ savedModelDecoder =
         |> required "path" (JD.list intPairDecoder)
         |> required "moves" (JD.list JD.string)
         |> required "board" boardDecoder
+        |> optional "score" scoreDecoder Types.zeroScore
 
 
 encodePage : Page -> Value
@@ -235,3 +238,22 @@ boardDecoder =
                     |> Array.fromList
                     |> JD.succeed
             )
+
+
+encodeScore : Score -> Value
+encodeScore score =
+    JE.object
+        [ ( "zephyrusGames", JE.int score.zephyrusGames )
+        , ( "notusGames", JE.int score.notusGames )
+        , ( "zephyrusScore", JE.int score.zephyrusScore )
+        , ( "notusScore", JE.int score.notusScore )
+        ]
+
+
+scoreDecoder : Decoder Score
+scoreDecoder =
+    JD.succeed Score
+        |> required "zephyrusGames" JD.int
+        |> required "notusGames" JD.int
+        |> required "zephyrusScore" JD.int
+        |> required "notusScore" JD.int

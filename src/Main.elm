@@ -113,7 +113,9 @@ import Zephyrnot.Types as Types
         , Page(..)
         , Player(..)
         , SavedModel
+        , Score
         , Winner(..)
+        , zeroScore
         )
 
 
@@ -130,6 +132,7 @@ type alias Model =
     , path : List ( Int, Int )
     , moves : List String
     , board : Board
+    , score : Score
     }
 
 
@@ -138,6 +141,7 @@ type Msg
     | SetDecoration Decoration
     | SetChooseFirst Player
     | SetPage Page
+    | ResetScore
     | NewGame
     | Click ( Int, Int )
     | WindowResize Int Int
@@ -189,6 +193,7 @@ init flags url key =
     , path = []
     , moves = []
     , board = Board.empty
+    , score = zeroScore
     }
         |> withCmds
             [ Task.perform getViewport Dom.getViewport
@@ -259,6 +264,7 @@ modelToSavedModel model =
     , path = model.path
     , moves = model.moves
     , board = model.board
+    , score = model.score
     }
 
 
@@ -274,6 +280,7 @@ savedModelToModel savedModel model =
         , path = savedModel.path
         , moves = savedModel.moves
         , board = savedModel.board
+        , score = savedModel.score
     }
 
 
@@ -310,6 +317,10 @@ updateInternal msg model =
 
         SetPage page ->
             { model | page = page }
+                |> withNoCmd
+
+        ResetScore ->
+            { model | score = Types.zeroScore }
                 |> withNoCmd
 
         NewGame ->
@@ -520,10 +531,33 @@ doClick row col model =
 
         ( winner, path ) =
             Board.winner model.player mdl.board
+
+        score =
+            model.score
     in
     { mdl
         | winner = winner
         , path = path
+        , score =
+            case winner of
+                HorizontalWinner ->
+                    { score
+                        | zephyrusGames =
+                            score.zephyrusGames + 1
+                        , zephyrusScore =
+                            score.zephyrusScore + Board.score mdl.board
+                    }
+
+                VerticalWinner ->
+                    { score
+                        | notusGames =
+                            score.notusGames + 1
+                        , notusScore =
+                            score.notusScore + Board.score mdl.board
+                    }
+
+                _ ->
+                    score
     }
         |> withNoCmd
 
@@ -615,6 +649,9 @@ view model =
 mainPage : Int -> Model -> Html Msg
 mainPage bsize model =
     let
+        score =
+            model.score
+
         message =
             case model.winner of
                 HorizontalWinner ->
@@ -737,6 +774,18 @@ mainPage bsize model =
                 "Notus"
                 (model.chooseFirst == Notus)
                 (SetChooseFirst Notus)
+            , br
+            , text "Zephyrus/Notus, points: "
+            , text <| String.fromInt score.zephyrusScore
+            , text "/"
+            , text <| String.fromInt score.notusScore
+            , text ", games: "
+            , text <| String.fromInt score.zephyrusGames
+            , text "/"
+            , text <| String.fromInt score.notusGames
+            , text " "
+            , button [ onClick ResetScore ]
+                [ text "Reset" ]
             , br
             , button
                 [ onClick NewGame ]

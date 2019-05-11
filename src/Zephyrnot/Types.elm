@@ -16,7 +16,9 @@ module Zephyrnot.Types exposing
     , Page(..)
     , Player(..)
     , SavedModel
+    , Score
     , Winner(..)
+    , zeroScore
     )
 
 import Array exposing (Array)
@@ -50,6 +52,19 @@ type Page
     | InstructionsPage
 
 
+type alias Score =
+    { zephyrusGames : Int
+    , notusGames : Int
+    , zephyrusScore : Int
+    , notusScore : Int
+    }
+
+
+zeroScore : Score
+zeroScore =
+    Score 0 0 0 0
+
+
 type alias SavedModel =
     { page : Page
     , decoration : Decoration
@@ -60,4 +75,5 @@ type alias SavedModel =
     , path : List ( Int, Int )
     , moves : List String
     , board : Board
+    , score : Score
     }

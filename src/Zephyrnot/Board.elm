@@ -12,10 +12,12 @@
 
 module Zephyrnot.Board exposing
     ( colToString
+    , count
     , empty
     , get
     , render
     , rowToString
+    , score
     , set
     , winner
     )
@@ -68,6 +70,20 @@ import Zephyrnot.Types
 empty : Board
 empty =
     Array.repeat 6 (Array.repeat 6 False)
+
+
+count : Board -> Int
+count board =
+    Array.toList board
+        |> List.map Array.toList
+        |> List.concat
+        |> List.filter ((==) True)
+        |> List.length
+
+
+score : Board -> Int
+score board =
+    31 - count board
 
 
 get : Int -> Int -> Board -> Bool
