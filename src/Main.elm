@@ -630,109 +630,107 @@ view model =
     in
     { title = "ZEPHYRNOT"
     , body =
-        [ div
-            [ align "center"
-            ]
-            [ h1
-                [ style "margin" "0 0 0.2em 0"
-                , herculanumStyle
+        [ if bsize == 0 then
+            text ""
+
+          else
+            div
+                [ align "center"
                 ]
-                [ text "Zephyrnot" ]
-            , h2
-                [ style "margin" "0 0 0.2em 0"
-                , herculanumStyle
-                ]
-                [ text "Feud of the Winds" ]
-            , p [ style "margin" "0" ]
-                [ text "Invented by Chris St. Clair" ]
-            , if bsize == 0 then
-                text ""
-
-              else
-                div []
-                    [ p []
-                        [ Board.render bsize
-                            Click
-                            model.decoration
-                            model.path
-                            model.board
-                        ]
-                    , p
-                        []
-                        [ span
-                            [ style "color"
-                                (if model.winner == NoWinner then
-                                    "red"
-
-                                 else
-                                    "orange"
-                                )
-                            , style "font-weight"
-                                (if model.winner == NoWinner then
-                                    "normal"
-
-                                 else
-                                    "bold"
-                                )
-                            , style "font-size"
-                                (if model.winner == NoWinner then
-                                    "100%"
-
-                                 else
-                                    "120%"
-                                )
-                            ]
-                            [ text message ]
-                        , br
-                        , if model.winner /= NoWinner then
-                            text ""
-
-                          else
-                            span []
-                                [ text "Stone Placer: "
-                                , text <|
-                                    case model.player of
-                                        Zephyrus ->
-                                            "Zephyrus"
-
-                                        Notus ->
-                                            "Notus"
-                                ]
-                        , br
-                        , text "Choose first: "
-                        , radio "choose"
-                            "Zephyrus"
-                            (model.chooseFirst == Zephyrus)
-                            (SetChooseFirst Zephyrus)
-                        , text " "
-                        , radio "choose"
-                            "Notus"
-                            (model.chooseFirst == Notus)
-                            (SetChooseFirst Notus)
-                        , br
-                        , button
-                            [ onClick NewGame ]
-                            [ text "New Game" ]
-                        ]
-                    , p []
-                        [ text "Moves: "
-                        , text <| movesToString (List.reverse model.moves)
-                        ]
-                    , p []
-                        [ a
-                            [ href "Zephyrnot.pdf"
-                            , target "_blank"
-                            ]
-                            [ text "Instructions" ]
-                        , br
-                        , a
-                            [ href "https://github.com/billstclair/zephyrnot/"
-                            , target "_blank"
-                            ]
-                            [ text "GitHub" ]
-                        ]
+                [ h1
+                    [ style "margin" "0 0 0.2em 0"
+                    , herculanumStyle
                     ]
-            ]
+                    [ text "Zephyrnot" ]
+                , h2
+                    [ style "margin" "0 0 0.2em 0"
+                    , herculanumStyle
+                    ]
+                    [ text "Feud of the Winds" ]
+                , p [ style "margin" "0" ]
+                    [ text "Invented by Chris St. Clair" ]
+                , p []
+                    [ Board.render bsize
+                        Click
+                        model.decoration
+                        model.path
+                        model.board
+                    ]
+                , p
+                    []
+                    [ span
+                        [ style "color"
+                            (if model.winner == NoWinner then
+                                "red"
+
+                             else
+                                "orange"
+                            )
+                        , style "font-weight"
+                            (if model.winner == NoWinner then
+                                "normal"
+
+                             else
+                                "bold"
+                            )
+                        , style "font-size"
+                            (if model.winner == NoWinner then
+                                "100%"
+
+                             else
+                                "120%"
+                            )
+                        ]
+                        [ text message ]
+                    , br
+                    , if model.winner /= NoWinner then
+                        text ""
+
+                      else
+                        span []
+                            [ text "Stone Placer: "
+                            , text <|
+                                case model.player of
+                                    Zephyrus ->
+                                        "Zephyrus"
+
+                                    Notus ->
+                                        "Notus"
+                            ]
+                    , br
+                    , text "Choose first: "
+                    , radio "choose"
+                        "Zephyrus"
+                        (model.chooseFirst == Zephyrus)
+                        (SetChooseFirst Zephyrus)
+                    , text " "
+                    , radio "choose"
+                        "Notus"
+                        (model.chooseFirst == Notus)
+                        (SetChooseFirst Notus)
+                    , br
+                    , button
+                        [ onClick NewGame ]
+                        [ text "New Game" ]
+                    ]
+                , p []
+                    [ text "Moves: "
+                    , text <| movesToString (List.reverse model.moves)
+                    ]
+                , p []
+                    [ a
+                        [ href "Zephyrnot.pdf"
+                        , target "_blank"
+                        ]
+                        [ text "Instructions" ]
+                    , br
+                    , a
+                        [ href "https://github.com/billstclair/zephyrnot/"
+                        , target "_blank"
+                        ]
+                        [ text "GitHub" ]
+                    ]
+                ]
         ]
     }
 
