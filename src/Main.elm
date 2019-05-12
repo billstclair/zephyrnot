@@ -1239,28 +1239,26 @@ auxPage bsize model =
                     text "Simulate"
                 ]
             , br
-            , text "Zephyrus/Notus points: "
-            , text hscore
-            , text "/"
-            , text vscore
-            , text ", games: "
-            , text <| String.fromInt horizontalWins
-            , text "/"
-            , text <| String.fromInt verticalWins
-            , text ", "
-            , text <| String.fromInt percent
-            , text "/"
-            , text <| String.fromInt (100 - percent)
-            , text "%"
-            ]
-        , if model.gamesLeft <= 0 then
-            text ""
+            , if horizontalWins == 0 && verticalWins == 0 then
+                text ""
 
-          else
-            p [ align "center" ]
-                [ b "Games left: "
-                , text <| String.fromInt model.gamesLeft
-                ]
+              else
+                span []
+                    [ text "Zephyrus/Notus points: "
+                    , text hscore
+                    , text "/"
+                    , text vscore
+                    , text ", games: "
+                    , text <| String.fromInt horizontalWins
+                    , text "/"
+                    , text <| String.fromInt verticalWins
+                    , text ", "
+                    , text <| String.fromInt percent
+                    , text "/"
+                    , text <| String.fromInt (100 - percent)
+                    , text "%"
+                    ]
+            ]
         ]
 
 
