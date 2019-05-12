@@ -50,6 +50,7 @@ type Page
     = MainPage
     | RulesPage
     | InstructionsPage
+    | AuxPage
 
 
 type alias Score =

@@ -77,6 +77,9 @@ encodePage page =
             InstructionsPage ->
                 "InstructionsPage"
 
+            AuxPage ->
+                "AuxPage"
+
 
 pageDecoder : Decoder Page
 pageDecoder =
@@ -92,6 +95,9 @@ pageDecoder =
 
                     "InstructionsPage" ->
                         JD.succeed InstructionsPage
+
+                    "AuxPage" ->
+                        JD.succeed AuxPage
 
                     _ ->
                         JD.fail <| "Unknown page: " ++ s

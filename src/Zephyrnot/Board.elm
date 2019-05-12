@@ -21,6 +21,7 @@ module Zephyrnot.Board exposing
     , rowToString
     , score
     , set
+    , simulateGame
     , winner
     )
 
@@ -28,6 +29,7 @@ import Array exposing (Array)
 import Dict exposing (Dict)
 import Html exposing (Html)
 import List.Extra as LE
+import Random exposing (Seed)
 import Set exposing (Set)
 import Svg exposing (Attribute, Svg, foreignObject, g, line, rect, svg)
 import Svg.Attributes
@@ -220,6 +222,153 @@ winner player board =
 
     else
         ( NoWinner, [] )
+
+
+
+---
+--- Simulation
+---
+
+
+simulateGame : Seed -> ( Winner, Int, Seed )
+simulateGame seed =
+    let
+        loop s b isH =
+            let
+                ( s2, b2 ) =
+                    simulateMove s b isH
+
+                player =
+                    if isH then
+                        Zephyrus
+
+                    else
+                        Notus
+
+                ( win, _ ) =
+                    winner player b2
+            in
+            if win == NoWinner then
+                loop s2 b2 (not isH)
+
+            else
+                ( win, score b2, s2 )
+    in
+    loop seed empty True
+
+
+simulateMove : Seed -> Board -> Bool -> ( Seed, Board )
+simulateMove seed board isH =
+    let
+        gen =
+            Random.int 0 5
+
+        ( row, seed2 ) =
+            Random.step gen seed
+
+        ( col, seed3 ) =
+            Random.step gen seed2
+
+        ( board2, seed5 ) =
+            if get row col board then
+                if isH then
+                    let
+                        cnt =
+                            emptyCols row board
+
+                        ( c, seed4 ) =
+                            Random.step (Random.int 0 (cnt - 1)) seed3
+                    in
+                    ( setEmptyCol row c board, seed4 )
+
+                else
+                    let
+                        cnt =
+                            emptyRows col board
+
+                        ( r, seed4 ) =
+                            Random.step (Random.int 0 (cnt - 1)) seed3
+                    in
+                    ( setEmptyRow r col board, seed4 )
+
+            else
+                ( set row col board, seed3 )
+    in
+    ( seed5, board2 )
+
+
+emptyCols : Int -> Board -> Int
+emptyCols row board =
+    List.foldl
+        (\col sum ->
+            if get row col board then
+                sum
+
+            else
+                sum + 1
+        )
+        0
+        (List.range 0 5)
+
+
+setEmptyCol : Int -> Int -> Board -> Board
+setEmptyCol row col board =
+    let
+        loop cnt c =
+            if not <| get row c board then
+                if cnt == 0 then
+                    set row c board
+
+                else
+                    loop (cnt - 1) (c + 1)
+
+            else if c >= 5 then
+                board
+
+            else
+                loop cnt (c + 1)
+    in
+    loop row 0
+
+
+emptyRows : Int -> Board -> Int
+emptyRows col board =
+    List.foldl
+        (\row sum ->
+            if get row col board then
+                sum
+
+            else
+                sum + 1
+        )
+        0
+        (List.range 0 5)
+
+
+setEmptyRow : Int -> Int -> Board -> Board
+setEmptyRow row col board =
+    let
+        loop cnt r =
+            if not <| get r col board then
+                if cnt == 0 then
+                    set r col board
+
+                else
+                    loop (cnt - 1) (r + 1)
+
+            else if r >= 5 then
+                board
+
+            else
+                loop cnt (r + 1)
+    in
+    loop row 0
+
+
+
+---
+--- Rendering
+---
 
 
 tos : Int -> String

@@ -19,6 +19,8 @@ import Browser.Navigation as Navigation exposing (Key)
 import Char
 import Cmd.Extra exposing (withCmd, withCmds, withNoCmd)
 import Dict exposing (Dict)
+import FormatNumber exposing (format)
+import FormatNumber.Locales exposing (usLocale)
 import Html
     exposing
         ( Attribute
@@ -80,6 +82,7 @@ import Markdown
 import PortFunnel.LocalStorage as LocalStorage
 import PortFunnel.LocalStorage.Sequence as Sequence exposing (KeyPair)
 import PortFunnels exposing (FunnelDict, Handler(..))
+import Random exposing (Seed)
 import Svg exposing (Svg, foreignObject, g, line, rect, svg)
 import Svg.Attributes
     exposing
@@ -103,6 +106,7 @@ import Svg.Attributes
 import Svg.Button as SB exposing (Button, Content(..))
 import Svg.Events
 import Task
+import Time exposing (Posix)
 import Url exposing (Url)
 import Zephyrnot.Board as Board exposing (SizerKind(..))
 import Zephyrnot.EncodeDecode as ED
@@ -119,10 +123,27 @@ import Zephyrnot.Types as Types
         )
 
 
+type alias SimulatorResult =
+    { horizontalWins : Int
+    , verticalWins : Int
+    , horizontalScore : Int
+    , verticalScore : Int
+    }
+
+
 type alias Model =
     { key : Key
     , windowSize : ( Int, Int )
     , started : Bool
+    , gameCount : Int
+    , gameCountString : String
+    , uiPeriod : Int
+    , uiPeriodString : String
+    , gamesLeft : Int
+    , simulatorResult : SimulatorResult
+    , seed : Seed
+
+    -- persistent below here
     , page : Page
     , decoration : Decoration
     , firstSelection : Decoration
@@ -144,6 +165,11 @@ type Msg
     | ResetScore
     | NewGame
     | Click ( Int, Int )
+    | SetGameCount String
+    | SetUIPeriod String
+    | ToggleSimulator
+    | SimulatorStep
+    | InitializeSeed Posix
     | WindowResize Int Int
     | HandleUrlRequest UrlRequest
     | HandleUrlChange Url
@@ -184,6 +210,13 @@ init flags url key =
     { key = key
     , windowSize = ( 0, 0 )
     , started = False
+    , gameCount = 1000
+    , gameCountString = "1000"
+    , uiPeriod = 1
+    , uiPeriodString = "1"
+    , gamesLeft = 0
+    , simulatorResult = SimulatorResult 0 0 0 0
+    , seed = Random.initialSeed 0 --get time for this
     , page = MainPage
     , decoration = NoDecoration
     , firstSelection = NoDecoration
@@ -197,6 +230,7 @@ init flags url key =
     }
         |> withCmds
             [ Task.perform getViewport Dom.getViewport
+            , Task.perform InitializeSeed Time.now
             ]
 
 
@@ -342,6 +376,109 @@ updateInternal msg model =
             else
                 doClick row col model
 
+        SetGameCount string ->
+            { model
+                | gameCount =
+                    String.toInt string
+                        |> Maybe.withDefault model.gameCount
+            }
+                |> withNoCmd
+
+        SetUIPeriod string ->
+            { model
+                | uiPeriod =
+                    String.toInt string
+                        |> Maybe.withDefault model.uiPeriod
+            }
+                |> withNoCmd
+
+        ToggleSimulator ->
+            let
+                gamesLeft =
+                    if model.gamesLeft == 0 then
+                        model.gameCount
+
+                    else
+                        0
+            in
+            { model
+                | gamesLeft = gamesLeft
+                , simulatorResult = SimulatorResult 0 0 0 0
+            }
+                |> withCmd
+                    (if gamesLeft > 0 then
+                        simulatorStepCmd ()
+
+                     else
+                        Cmd.none
+                    )
+
+        SimulatorStep ->
+            let
+                count =
+                    min (max 1 model.uiPeriod) model.gamesLeft
+
+                loop seed left c1 c2 s1 s2 =
+                    if left <= 0 then
+                        ( SimulatorResult c1 c2 s1 s2, seed )
+
+                    else
+                        let
+                            ( winner, score, seed2 ) =
+                                Board.simulateGame seed
+
+                            ( ( c12, c22 ), ( s12, s22 ) ) =
+                                case winner of
+                                    HorizontalWinner ->
+                                        ( ( c1 + 1, c2 ), ( s1 + score, s2 ) )
+
+                                    VerticalWinner ->
+                                        ( ( c1, c2 + 1 ), ( s1, s2 + score ) )
+
+                                    _ ->
+                                        ( ( c1, c2 ), ( s2, s2 ) )
+                        in
+                        loop seed2 (left - 1) c12 c22 s12 s22
+
+                gamesLeft =
+                    model.gamesLeft - count
+
+                oldResult =
+                    model.simulatorResult
+
+                ( newResult, newSeed ) =
+                    loop model.seed count 0 0 0 0
+
+                simulatorResult =
+                    { horizontalWins =
+                        oldResult.horizontalWins + newResult.horizontalWins
+                    , verticalWins =
+                        oldResult.verticalWins + newResult.verticalWins
+                    , horizontalScore =
+                        oldResult.horizontalScore + newResult.horizontalScore
+                    , verticalScore =
+                        oldResult.verticalScore + newResult.verticalScore
+                    }
+            in
+            { model
+                | simulatorResult = simulatorResult
+                , gamesLeft = gamesLeft
+                , seed = newSeed
+            }
+                |> withCmd
+                    (if gamesLeft > 0 then
+                        simulatorStepCmd ()
+
+                     else
+                        Cmd.none
+                    )
+
+        InitializeSeed posix ->
+            { model
+                | seed = Random.initialSeed <| Time.posixToMillis posix
+            }
+                |> withNoCmd
+
         WindowResize w h ->
             { model | windowSize = ( w, h ) }
                 |> withNoCmd
@@ -374,6 +511,11 @@ updateInternal msg model =
 
                 Ok res ->
                     res
+
+
+simulatorStepCmd : () -> Cmd Msg
+simulatorStepCmd x =
+    Task.perform (\_ -> SimulatorStep) <| Task.succeed x
 
 
 doClick : Int -> Int -> Model -> ( Model, Cmd Msg )
@@ -641,6 +783,9 @@ view model =
 
                     InstructionsPage ->
                         instructionsPage bsize model
+
+                    AuxPage ->
+                        auxPage bsize model
                 ]
         ]
     }
@@ -805,6 +950,12 @@ mainPage bsize model =
                 , onClick <| SetPage InstructionsPage
                 ]
                 [ text "Instructions" ]
+            , text " "
+            , a
+                [ href "#"
+                , onClick <| SetPage AuxPage
+                ]
+                [ text "Aux" ]
             , text " "
             , a
                 [ href "#"
@@ -1055,6 +1206,81 @@ move. Will you be able to predict the wind?
                 ]
             ]
         , playButton
+        ]
+
+
+auxPage : Int -> Model -> Html Msg
+auxPage bsize model =
+    let
+        { horizontalWins, verticalWins, horizontalScore, verticalScore } =
+            model.simulatorResult
+
+        locale =
+            { usLocale | decimals = 1 }
+
+        hscore =
+            (toFloat horizontalScore / toFloat horizontalWins)
+                |> format locale
+
+        vscore =
+            (toFloat verticalScore / toFloat verticalWins)
+                |> format locale
+
+        percent =
+            100 * horizontalWins // (horizontalWins + verticalWins)
+    in
+    rulesDiv False
+        [ br
+        , playButton
+        , rulesDiv True
+            [ br, b "Aux" ]
+        , p [ align "center" ]
+            [ b "Game Count: "
+            , input
+                [ onInput SetGameCount
+                , value model.gameCountString
+                , size 4
+                ]
+                []
+            , b " UI period: "
+            , input
+                [ onInput SetUIPeriod
+                , value model.uiPeriodString
+                , size 4
+                ]
+                []
+            , text " "
+            , button
+                [ onClick ToggleSimulator ]
+                [ if model.gamesLeft > 0 then
+                    text "Stop"
+
+                  else
+                    text "Simulate"
+                ]
+            , br
+            , text "Zephyrus/Notus points: "
+            , text hscore
+            , text "/"
+            , text vscore
+            , text ", games: "
+            , text <| String.fromInt horizontalWins
+            , text "/"
+            , text <| String.fromInt verticalWins
+            , text ", "
+            , text <| String.fromInt percent
+            , text "/"
+            , text <| String.fromInt (100 - percent)
+            , text "%"
+            ]
+        , if model.gamesLeft <= 0 then
+            text ""
+
+          else
+            p [ align "center" ]
+                [ b "Games left: "
+                , text <| String.fromInt model.gamesLeft
+                ]
         ]
 
 
