@@ -137,8 +137,6 @@ type alias Model =
     , started : Bool
     , gameCount : Int
     , gameCountString : String
-    , uiPeriod : Int
-    , uiPeriodString : String
     , gamesLeft : Int
     , simulatorResult : SimulatorResult
     , seed : Seed
@@ -166,7 +164,6 @@ type Msg
     | NewGame
     | Click ( Int, Int )
     | SetGameCount String
-    | SetUIPeriod String
     | ToggleSimulator
     | SimulatorStep
     | InitializeSeed Posix
@@ -212,8 +209,6 @@ init flags url key =
     , started = False
     , gameCount = 1000
     , gameCountString = "1000"
-    , uiPeriod = 1
-    , uiPeriodString = "1"
     , gamesLeft = 0
     , simulatorResult = SimulatorResult 0 0 0 0
     , seed = Random.initialSeed 0 --get time for this
@@ -384,14 +379,6 @@ updateInternal msg model =
             }
                 |> withNoCmd
 
-        SetUIPeriod string ->
-            { model
-                | uiPeriod =
-                    String.toInt string
-                        |> Maybe.withDefault model.uiPeriod
-            }
-                |> withNoCmd
-
         ToggleSimulator ->
             let
                 gamesLeft =
@@ -416,7 +403,7 @@ updateInternal msg model =
         SimulatorStep ->
             let
                 count =
-                    min (max 1 model.uiPeriod) model.gamesLeft
+                    model.gamesLeft
 
                 loop seed left c1 c2 s1 s2 =
                     if left <= 0 then
@@ -1239,13 +1226,6 @@ auxPage bsize model =
             , input
                 [ onInput SetGameCount
                 , value model.gameCountString
-                , size 4
-                ]
-                []
-            , b " UI period: "
-            , input
-                [ onInput SetUIPeriod
-                , value model.uiPeriodString
                 , size 4
                 ]
                 []
