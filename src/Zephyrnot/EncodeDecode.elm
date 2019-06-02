@@ -28,6 +28,24 @@ import Zephyrnot.Types as Types
         )
 
 
+encodeMoves : List String -> Value
+encodeMoves moves =
+    moves
+        |> List.intersperse ","
+        |> String.concat
+        |> JE.string
+
+
+movesDecoder : Decoder (List String)
+movesDecoder =
+    JD.oneOf
+        [ JD.string
+            |> JD.andThen
+                (String.split "," >> JD.succeed)
+        , JD.list JD.string --backward compatibility
+        ]
+
+
 encodeSavedModel : SavedModel -> Value
 encodeSavedModel model =
     JE.object
@@ -38,7 +56,7 @@ encodeSavedModel model =
         , ( "player", encodePlayer model.player )
         , ( "winner", encodeWinner model.winner )
         , ( "path", JE.list encodeIntPair model.path )
-        , ( "moves", JE.list JE.string model.moves )
+        , ( "moves", encodeMoves model.moves )
         , ( "board", encodeBoard model.board )
         , ( "score", encodeScore model.score )
         ]
@@ -59,7 +77,7 @@ savedModelDecoder =
         |> required "player" playerDecoder
         |> required "winner" winnerDecoder
         |> required "path" (JD.list intPairDecoder)
-        |> required "moves" (JD.list JD.string)
+        |> required "moves" movesDecoder
         |> required "board" boardDecoder
         |> optional "score" scoreDecoder Types.zeroScore
 
@@ -230,13 +248,94 @@ intPairDecoder =
             )
 
 
+boolToString : Bool -> String
+boolToString bool =
+    if bool then
+        "0"
+
+    else
+        "-"
+
+
+stringToBool : String -> Bool
+stringToBool string =
+    string == "0"
+
+
+rowToString : Array Bool -> String
+rowToString row =
+    Array.toList row
+        |> List.map boolToString
+        |> String.concat
+
+
+stringToRow : String -> Array Bool
+stringToRow string =
+    String.toList string
+        |> List.map String.fromChar
+        |> List.map stringToBool
+        |> Array.fromList
+
+
+boardToString : Board -> String
+boardToString board =
+    Array.toList board
+        |> List.map rowToString
+        |> List.intersperse "|"
+        |> String.concat
+
+
+stringToBoard : String -> Maybe Board
+stringToBoard string =
+    if String.length string /= 41 then
+        Nothing
+
+    else
+        let
+            rows =
+                [ String.slice 0 6 string
+                , String.slice 7 13 string
+                , String.slice 14 20 string
+                , String.slice 21 27 string
+                , String.slice 28 34 string
+                , String.slice 35 41 string
+                ]
+        in
+        rows
+            |> List.map stringToRow
+            |> Array.fromList
+            |> Just
+
+
 encodeBoard : Board -> Value
 encodeBoard board =
-    JE.array (JE.array JE.bool) board
+    JE.string <| boardToString board
+
+
+newBoardDecoder : Decoder Board
+newBoardDecoder =
+    JD.string
+        |> JD.andThen
+            (\string ->
+                case stringToBoard string of
+                    Nothing ->
+                        JD.fail "Invalid board string."
+
+                    Just board ->
+                        JD.succeed board
+            )
 
 
 boardDecoder : Decoder Board
 boardDecoder =
+    JD.oneOf
+        [ oldBoardDecoder
+        , newBoardDecoder
+        ]
+
+
+oldBoardDecoder : Decoder Board
+oldBoardDecoder =
     JD.list (JD.list JD.bool)
         |> JD.andThen
             (\l ->

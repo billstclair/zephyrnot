@@ -11,6 +11,7 @@
             "billstclair/elm-localstorage": "7.2.0",
             "billstclair/elm-port-funnel": "1.2.0",
             "billstclair/elm-svg-button": "3.0.0",
+            "billstclair/elm-websocket-framework": "13.0.2",
             "cuducos/elm-format-number": "6.0.2",
             "elm/browser": "1.0.1",
             "elm/core": "1.0.2",
@@ -25,6 +26,10 @@
             "elm-explorations/markdown": "1.0.0"
         },
         "indirect": {
+            "billstclair/elm-websocket-client": "4.1.0",
+            "elm/bytes": "1.0.8",
+            "elm/file": "1.0.5",
+            "elm/http": "2.0.0",
             "elm/regex": "1.0.0",
             "elm/virtual-dom": "1.0.2",
             "elm-community/dict-extra": "2.4.0",
