@@ -172,6 +172,6 @@ type Message
         }
     | ChatRsp
         { gameid : String
-        , player : Player
+        , name : String
         , text : String
         }

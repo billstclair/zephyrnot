@@ -10,7 +10,16 @@
 ----------------------------------------------------------------------
 
 
-module Zephyrnot.EncodeDecode exposing (decodeSavedModel, encodeSavedModel)
+module Zephyrnot.EncodeDecode exposing
+    ( boardToString
+    , decodeSavedModel
+    , encodeGameState
+    , encodeSavedModel
+    , gameStateDecoder
+    , messageDecoder
+    , messageEncoder
+    , stringToBoard
+    )
 
 import Array exposing (Array)
 import Json.Decode as JD exposing (Decoder)
@@ -552,17 +561,13 @@ messageEncoder message =
               ]
             )
 
-        ChatRsp { gameid, player, text } ->
+        ChatRsp { gameid, name, text } ->
             ( Rsp "chat"
             , [ ( "gameid", JE.string gameid )
-              , ( "player", encodePlayer player )
+              , ( "name", JE.string name )
               , ( "text", JE.string text )
               ]
             )
-
-
-foo =
-    Err "foo"
 
 
 newReqDecoder : Decoder Message
@@ -739,15 +744,15 @@ errorRspDecoder =
 chatRspDecoder : Decoder Message
 chatRspDecoder =
     JD.succeed
-        (\gameid player text ->
+        (\gameid name text ->
             ChatRsp
                 { gameid = gameid
-                , player = player
+                , name = name
                 , text = text
                 }
         )
         |> required "gameid" JD.string
-        |> required "player" playerDecoder
+        |> required "name" JD.string
         |> required "text" JD.string
 
 
