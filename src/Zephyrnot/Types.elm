@@ -100,7 +100,7 @@ type alias GameState =
     { board : Board
     , moves : List String
     , players : PlayerNames
-    , whoseturn : Player
+    , whoseTurn : Player
     , score : Score
     , winner : Winner
     }
@@ -135,7 +135,8 @@ type Message
         , name : String
         }
     | JoinRsp
-        { playerid : PlayerId
+        { gameid : GameId
+        , playerid : PlayerId
         , names : PlayerNames
         , gameState : GameState
         }
@@ -155,7 +156,10 @@ type Message
         { gameid : GameId
         , placement : Choice
         }
-    | GameOverRsp { winner : Winner }
+    | GameOverRsp
+        { gameid : GameId
+        , winner : Winner
+        }
       -- Errors
     | ErrorRsp
         { request : String
