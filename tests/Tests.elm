@@ -89,7 +89,7 @@ protocolTest message name =
         (\_ ->
             let
                 pair =
-                    maybeLog "protocolJson" <| ED.messageEncoder message
+                    maybeLog "protocolJson" <| ED.messageEncoderWithPrivate message
             in
             expectResult (Ok message) <| ED.messageDecoder pair
         )
@@ -99,13 +99,27 @@ protocolData : List Message
 protocolData =
     [ NewReq
         { name = "Bill"
+        , player = Zephyrus
         , isPublic = True
         , restoreState = Nothing
         }
     , NewReq
         { name = "Joe"
+        , player = Notus
         , isPublic = False
         , restoreState = Just gameState1
+        }
+    , NewRsp
+        { gameid = "123"
+        , playerid = "76"
+        , player = Zephyrus
+        , name = "Joe"
+        }
+    , NewRsp
+        { gameid = "123a"
+        , playerid = "76b"
+        , player = Notus
+        , name = "Joel"
         }
     , JoinReq
         { gameid = "123"
@@ -114,7 +128,7 @@ protocolData =
     , JoinRsp
         { gameid = "123"
         , playerid = "77"
-        , names = players1
+        , player = Notus
         , gameState = gameState2
         }
     , LeaveReq { playerid = "77" }
@@ -130,7 +144,7 @@ protocolData =
         }
     , PlayReq
         { playerid = "78"
-        , placement = ChooseCol 2
+        , placement = ChooseCol 3
         }
     , PlayReq
         { playerid = "79"
@@ -266,7 +280,7 @@ gameStateTest gameState name =
         (\_ ->
             let
                 value =
-                    maybeLog "gameState" <| ED.encodeGameState gameState
+                    maybeLog "gameState" <| ED.encodeGameState True gameState
             in
             expectResult (Ok gameState) <|
                 decodeValue ED.gameStateDecoder value
@@ -296,6 +310,7 @@ gameState1 =
     , whoseTurn = Zephyrus
     , score = score1
     , winner = NoWinner
+    , private = { receivedPlacement = Just (ChooseRow 0) }
     }
 
 
@@ -306,6 +321,7 @@ gameState2 =
     , whoseTurn = Notus
     , score = score1
     , winner = HorizontalWinner
+    , private = { receivedPlacement = Just (ChooseCol 2) }
     }
 
 
@@ -316,6 +332,7 @@ gameState3 =
     , whoseTurn = Notus
     , score = score2
     , winner = VerticalWinner
+    , private = { receivedPlacement = Nothing }
     }
 
 

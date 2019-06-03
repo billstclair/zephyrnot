@@ -19,9 +19,12 @@ module Zephyrnot.Types exposing
     , Page(..)
     , Player(..)
     , PlayerNames
+    , PrivateGameState
     , SavedModel
     , Score
     , Winner(..)
+    , emptyPrivateGameState
+    , messageToString
     , zeroScore
     )
 
@@ -96,6 +99,16 @@ type alias SavedModel =
 ---
 
 
+type alias PrivateGameState =
+    { receivedPlacement : Maybe Choice
+    }
+
+
+emptyPrivateGameState : PrivateGameState
+emptyPrivateGameState =
+    PrivateGameState Nothing
+
+
 type alias GameState =
     { board : Board
     , moves : List String
@@ -103,6 +116,9 @@ type alias GameState =
     , whoseTurn : Player
     , score : Score
     , winner : Winner
+
+    -- not sent over the wire
+    , private : PrivateGameState
     }
 
 
@@ -122,12 +138,14 @@ type Choice
 type Message
     = NewReq
         { name : String
+        , player : Player
         , isPublic : Bool
         , restoreState : Maybe GameState
         }
     | NewRsp
         { gameid : GameId
         , playerid : PlayerId
+        , player : Player
         , name : String
         }
     | JoinReq
@@ -137,7 +155,7 @@ type Message
     | JoinRsp
         { gameid : GameId
         , playerid : PlayerId
-        , names : PlayerNames
+        , player : Player
         , gameState : GameState
         }
     | LeaveReq { playerid : PlayerId }
@@ -175,3 +193,49 @@ type Message
         , name : String
         , text : String
         }
+
+
+messageToString : Message -> String
+messageToString message =
+    case message of
+        NewReq _ ->
+            "NewReq"
+
+        NewRsp _ ->
+            "NewRsp"
+
+        JoinReq _ ->
+            "JoinReq"
+
+        JoinRsp _ ->
+            "JoinRsp"
+
+        LeaveReq _ ->
+            "LeaveReq"
+
+        LeaveRsp _ ->
+            "LeaveRsp"
+
+        UpdateReq _ ->
+            "UpdateReq"
+
+        UpdateRsp _ ->
+            "UpdateRsp"
+
+        PlayReq _ ->
+            "PlayReq"
+
+        PlayRsp _ ->
+            "PlayRsp"
+
+        GameOverRsp _ ->
+            "GameOverRsp"
+
+        ErrorRsp _ ->
+            "ErrorRsp"
+
+        ChatReq _ ->
+            "ChatReq"
+
+        ChatRsp _ ->
+            "ChatRsp"

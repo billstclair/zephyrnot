@@ -18,6 +18,7 @@ module Zephyrnot.EncodeDecode exposing
     , gameStateDecoder
     , messageDecoder
     , messageEncoder
+    , messageEncoderWithPrivate
     , stringToBoard
     )
 
@@ -44,6 +45,7 @@ import Zephyrnot.Types as Types
         , Page(..)
         , Player(..)
         , PlayerNames
+        , PrivateGameState
         , SavedModel
         , Score
         , Winner(..)
@@ -407,8 +409,32 @@ playerNamesDecoder =
         |> required "notus" JD.string
 
 
-encodeGameState : GameState -> Value
-encodeGameState { board, moves, players, whoseTurn, score, winner } =
+encodePrivateGameState : PrivateGameState -> Value
+encodePrivateGameState { receivedPlacement } =
+    JE.object
+        [ ( "receivedPlacement"
+          , case receivedPlacement of
+                Nothing ->
+                    JE.null
+
+                Just choice ->
+                    encodeChoice choice
+          )
+        ]
+
+
+privateGameStateDecoder : Decoder PrivateGameState
+privateGameStateDecoder =
+    JD.succeed PrivateGameState
+        |> required "receivedPlacement" (JD.nullable choiceDecoder)
+
+
+encodeGameState : Bool -> GameState -> Value
+encodeGameState includePrivate gameState =
+    let
+        { board, moves, players, whoseTurn, score, winner } =
+            gameState
+    in
     JE.object
         [ ( "board", encodeBoard board )
         , ( "moves", encodeMoves moves )
@@ -416,6 +442,15 @@ encodeGameState { board, moves, players, whoseTurn, score, winner } =
         , ( "whoseTurn", encodePlayer whoseTurn )
         , ( "score", encodeScore score )
         , ( "winner", encodeWinner winner )
+        , ( "private"
+          , (if includePrivate then
+                gameState.private
+
+             else
+                Types.emptyPrivateGameState
+            )
+                |> encodePrivateGameState
+          )
         ]
 
 
@@ -428,6 +463,7 @@ gameStateDecoder =
         |> required "whoseTurn" playerDecoder
         |> required "score" scoreDecoder
         |> required "winner" winnerDecoder
+        |> required "private" privateGameStateDecoder
 
 
 encodeChoice : Choice -> Value
@@ -463,11 +499,22 @@ choiceDecoder =
 
 
 messageEncoder : Message -> ( ReqRsp, Plist )
-messageEncoder message =
+messageEncoder =
+    messageEncoderInternal False
+
+
+messageEncoderWithPrivate : Message -> ( ReqRsp, Plist )
+messageEncoderWithPrivate =
+    messageEncoderInternal True
+
+
+messageEncoderInternal : Bool -> Message -> ( ReqRsp, Plist )
+messageEncoderInternal includePrivate message =
     case message of
-        NewReq { name, isPublic, restoreState } ->
+        NewReq { name, player, isPublic, restoreState } ->
             ( Req "new"
             , [ ( "name", JE.string name )
+              , ( "player", encodePlayer player )
               , ( "isPublic", JE.bool isPublic )
               , ( "restoreState"
                 , case restoreState of
@@ -475,15 +522,16 @@ messageEncoder message =
                         JE.null
 
                     Just state ->
-                        encodeGameState state
+                        encodeGameState includePrivate state
                 )
               ]
             )
 
-        NewRsp { gameid, playerid, name } ->
+        NewRsp { gameid, playerid, player, name } ->
             ( Rsp "new"
             , [ ( "gameid", JE.string gameid )
               , ( "playerid", JE.string playerid )
+              , ( "player", encodePlayer player )
               , ( "name", JE.string name )
               ]
             )
@@ -495,12 +543,12 @@ messageEncoder message =
               ]
             )
 
-        JoinRsp { gameid, playerid, names, gameState } ->
+        JoinRsp { gameid, playerid, player, gameState } ->
             ( Rsp "join"
             , [ ( "gameid", JE.string gameid )
               , ( "playerid", JE.string playerid )
-              , ( "names", encodePlayerNames names )
-              , ( "gameState", encodeGameState gameState )
+              , ( "player", encodePlayer player )
+              , ( "gameState", encodeGameState includePrivate gameState )
               ]
             )
 
@@ -522,7 +570,7 @@ messageEncoder message =
         UpdateRsp { gameid, gameState } ->
             ( Rsp "update"
             , [ ( "gameid", JE.string gameid )
-              , ( "gameState", encodeGameState gameState )
+              , ( "gameState", encodeGameState includePrivate gameState )
               ]
             )
 
@@ -573,14 +621,16 @@ messageEncoder message =
 newReqDecoder : Decoder Message
 newReqDecoder =
     JD.succeed
-        (\name isPublic restoreState ->
+        (\name player isPublic restoreState ->
             NewReq
                 { name = name
+                , player = player
                 , isPublic = isPublic
                 , restoreState = restoreState
                 }
         )
         |> required "name" JD.string
+        |> required "player" playerDecoder
         |> required "isPublic" JD.bool
         |> required "restoreState" (JD.nullable gameStateDecoder)
 
@@ -649,32 +699,34 @@ chatReqDecoder =
 newRspDecoder : Decoder Message
 newRspDecoder =
     JD.succeed
-        (\gameid playerid name ->
+        (\gameid playerid player name ->
             NewRsp
                 { gameid = gameid
                 , playerid = playerid
+                , player = player
                 , name = name
                 }
         )
         |> required "gameid" JD.string
         |> required "playerid" JD.string
+        |> required "player" playerDecoder
         |> required "name" JD.string
 
 
 joinRspDecoder : Decoder Message
 joinRspDecoder =
     JD.succeed
-        (\gameid playerid names gameState ->
+        (\gameid playerid player gameState ->
             JoinRsp
                 { gameid = gameid
                 , playerid = playerid
-                , names = names
+                , player = player
                 , gameState = gameState
                 }
         )
         |> required "gameid" JD.string
         |> required "playerid" JD.string
-        |> required "names" playerNamesDecoder
+        |> required "player" playerDecoder
         |> required "gameState" gameStateDecoder
 
 
