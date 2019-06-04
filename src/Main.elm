@@ -416,10 +416,10 @@ updateInternal msg model =
 
                             ( ( c12, c22 ), ( s12, s22 ) ) =
                                 case winner of
-                                    HorizontalWinner ->
+                                    ZephyrusWinner ->
                                         ( ( c1 + 1, c2 ), ( s1 + score, s2 ) )
 
-                                    VerticalWinner ->
+                                    NotusWinner ->
                                         ( ( c1, c2 + 1 ), ( s1, s2 + score ) )
 
                                     _ ->
@@ -669,7 +669,7 @@ doClick row col model =
         , path = path
         , score =
             case winner of
-                HorizontalWinner ->
+                ZephyrusWinner ->
                     { score
                         | zephyrusGames =
                             score.zephyrusGames + 1
@@ -677,7 +677,7 @@ doClick row col model =
                             score.zephyrusScore + Board.score mdl.board
                     }
 
-                VerticalWinner ->
+                NotusWinner ->
                     { score
                         | notusGames =
                             score.notusGames + 1
@@ -780,10 +780,10 @@ mainPage bsize model =
 
         message =
             case model.winner of
-                HorizontalWinner ->
+                ZephyrusWinner ->
                     "Zephyrus wins in " ++ String.fromInt count ++ "!"
 
-                VerticalWinner ->
+                NotusWinner ->
                     "Notus wins in " ++ String.fromInt count ++ "!"
 
                 NoWinner ->

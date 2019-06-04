@@ -167,23 +167,30 @@ messageProcessor state message =
                         let
                             ( players2, player ) =
                                 if zephyrus == "" then
-                                    ( { players | notus = name }, Notus )
+                                    ( { players | zephyrus = name }, Zephyrus )
 
                                 else
-                                    ( { players | zephyrus = name }, Zephyrus )
+                                    ( { players | notus = name }, Notus )
 
                             ( playerid, state2 ) =
                                 ServerInterface.newPlayerid state
 
+                            state3 =
+                                ServerInterface.addPlayer playerid
+                                    { gameid = gameid
+                                    , player = player
+                                    }
+                                    state2
+
                             gameState2 =
                                 { gameState | players = players2 }
 
-                            state3 =
+                            state4 =
                                 ServerInterface.updateGame gameid
                                     gameState2
-                                    state2
+                                    state3
                         in
-                        ( state3
+                        ( state4
                         , Just <|
                             JoinRsp
                                 { gameid = gameid
@@ -254,13 +261,14 @@ messageProcessor state message =
                                         winner =
                                             case player of
                                                 Zephyrus ->
-                                                    VerticalWinner
+                                                    NotusWinner
 
                                                 Notus ->
-                                                    HorizontalWinner
+                                                    ZephyrusWinner
 
                                         gs =
                                             { gameState | winner = winner }
+                                                |> updateScore
                                     in
                                     ( ServerInterface.updateGame gameid gs state
                                     , Just <|
@@ -275,62 +283,74 @@ messageProcessor state message =
                                     errorRes message state "Game already over"
 
                         ChooseRow row ->
-                            let
-                                private =
-                                    gameState.private
+                            if player == Zephyrus then
+                                errorRes message
+                                    state
+                                    "Zephyrus may not choose rows"
 
-                                board =
-                                    gameState.board
+                            else
+                                let
+                                    private =
+                                        gameState.private
 
-                                decoration =
-                                    case private.decoration of
-                                        NoDecoration ->
-                                            RowSelectedDecoration row
+                                    board =
+                                        gameState.board
 
-                                        RowSelectedDecoration _ ->
-                                            RowSelectedDecoration row
+                                    decoration =
+                                        case private.decoration of
+                                            NoDecoration ->
+                                                RowSelectedDecoration row
 
-                                        ColSelectedDecoration col ->
-                                            AlreadyFilledDecoration ( row, col )
+                                            RowSelectedDecoration _ ->
+                                                RowSelectedDecoration row
 
-                                        AlreadyFilledDecoration ( _, col ) ->
-                                            if gameState.whoseTurn == Notus then
+                                            ColSelectedDecoration col ->
                                                 AlreadyFilledDecoration ( row, col )
 
-                                            else
-                                                -- Not your turn, may not resolve
-                                                private.decoration
-                            in
-                            doPlay decoration player gameid gameState state
+                                            AlreadyFilledDecoration ( _, col ) ->
+                                                if gameState.whoseTurn == Notus then
+                                                    AlreadyFilledDecoration ( row, col )
+
+                                                else
+                                                    -- Not your turn, may not resolve
+                                                    private.decoration
+                                in
+                                doPlay decoration player gameid gameState state
 
                         ChooseCol col ->
-                            let
-                                private =
-                                    gameState.private
+                            if player == Notus then
+                                errorRes message
+                                    state
+                                    "Notus may not choose columns"
 
-                                board =
-                                    gameState.board
+                            else
+                                let
+                                    private =
+                                        gameState.private
 
-                                decoration =
-                                    case private.decoration of
-                                        NoDecoration ->
-                                            ColSelectedDecoration col
+                                    board =
+                                        gameState.board
 
-                                        ColSelectedDecoration _ ->
-                                            ColSelectedDecoration col
+                                    decoration =
+                                        case private.decoration of
+                                            NoDecoration ->
+                                                ColSelectedDecoration col
 
-                                        RowSelectedDecoration row ->
-                                            AlreadyFilledDecoration ( row, col )
+                                            ColSelectedDecoration _ ->
+                                                ColSelectedDecoration col
 
-                                        AlreadyFilledDecoration ( row, _ ) ->
-                                            if gameState.whoseTurn == Zephyrus then
+                                            RowSelectedDecoration row ->
                                                 AlreadyFilledDecoration ( row, col )
 
-                                            else
-                                                -- Not your turn, may not resolve
-                                                private.decoration
-                            in
-                            doPlay decoration player gameid gameState state
+                                            AlreadyFilledDecoration ( row, _ ) ->
+                                                if gameState.whoseTurn == Zephyrus then
+                                                    AlreadyFilledDecoration ( row, col )
+
+                                                else
+                                                    -- Not your turn, may not resolve
+                                                    private.decoration
+                                in
+                                doPlay decoration player gameid gameState state
 
         ChatReq { playerid, text } ->
             case lookupGame message playerid state of
@@ -390,7 +410,7 @@ doPlay decoration player gameid gameState state =
                                 List.concat [ moves, [ cellName ( row, col ) ] ]
 
                             ( winner2, path2 ) =
-                                Board.winner player board
+                                Board.winner player board2
 
                             player2 =
                                 case winner2 of
@@ -416,6 +436,7 @@ doPlay decoration player gameid gameState state =
                 , path = path
                 , private = { private | decoration = newDecoration }
             }
+                |> updateScore
 
         state2 =
             ServerInterface.updateGame gameid gs state
@@ -444,3 +465,36 @@ doPlay decoration player gameid gameState state =
 cellName : ( Int, Int ) -> String
 cellName ( rowidx, colidx ) =
     Board.colToString colidx ++ Board.rowToString rowidx
+
+
+updateScore : GameState -> GameState
+updateScore gameState =
+    let
+        score =
+            gameState.score
+    in
+    case gameState.winner of
+        NoWinner ->
+            gameState
+
+        ZephyrusWinner ->
+            { gameState
+                | score =
+                    { score
+                        | zephyrusGames =
+                            score.zephyrusGames + 1
+                        , zephyrusScore =
+                            score.zephyrusScore + Board.score gameState.board
+                    }
+            }
+
+        NotusWinner ->
+            { gameState
+                | score =
+                    { score
+                        | notusGames =
+                            score.notusGames + 1
+                        , notusScore =
+                            score.notusScore + Board.score gameState.board
+                    }
+            }

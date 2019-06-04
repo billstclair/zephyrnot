@@ -173,14 +173,19 @@ protocolData =
         , gameState = gameState2
         , decoration = ColSelectedDecoration 2
         }
+    , PlayRsp
+        { gameid = "78"
+        , gameState = gameState4
+        , decoration = gameState4.private.decoration
+        }
     , ResignRsp
         { gameid = "79"
-        , gameState = { gameState3 | winner = VerticalWinner }
+        , gameState = { gameState3 | winner = NotusWinner }
         , player = Zephyrus
         }
     , ResignRsp
         { gameid = "79"
-        , gameState = { gameState3 | winner = HorizontalWinner }
+        , gameState = { gameState3 | winner = ZephyrusWinner }
         , player = Notus
         }
     , AnotherGameRsp
@@ -195,11 +200,11 @@ protocolData =
         }
     , GameOverRsp
         { gameid = "80"
-        , gameState = { gameState1 | winner = HorizontalWinner }
+        , gameState = { gameState1 | winner = ZephyrusWinner }
         }
     , GameOverRsp
         { gameid = "80"
-        , gameState = { gameState2 | winner = VerticalWinner }
+        , gameState = { gameState2 | winner = NotusWinner }
         }
     , ErrorRsp
         { request = "request"
@@ -328,7 +333,7 @@ gameState2 =
     , players = players2
     , whoseTurn = Notus
     , score = score1
-    , winner = HorizontalWinner
+    , winner = ZephyrusWinner
     , path = [ ( 1, 2 ), ( 2, 3 ) ]
     , private = { decoration = ColSelectedDecoration 2 }
     }
@@ -340,7 +345,7 @@ gameState3 =
     , players = players2
     , whoseTurn = Notus
     , score = score2
-    , winner = VerticalWinner
+    , winner = NotusWinner
     , path = [ ( 1, 2 ), ( 2, 3 ) ]
     , private = { decoration = NoDecoration }
     }

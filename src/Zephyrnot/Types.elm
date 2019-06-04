@@ -59,8 +59,8 @@ otherPlayer player =
 
 type Winner
     = NoWinner
-    | HorizontalWinner
-    | VerticalWinner
+    | ZephyrusWinner
+    | NotusWinner
 
 
 type Decoration

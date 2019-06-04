@@ -226,11 +226,11 @@ encodeWinner winner =
             NoWinner ->
                 "NoWinner"
 
-            HorizontalWinner ->
-                "HorizontalWinner"
+            ZephyrusWinner ->
+                "ZephyrusWinner"
 
-            VerticalWinner ->
-                "VerticalWinner"
+            NotusWinner ->
+                "NotusWinner"
 
 
 winnerDecoder : Decoder Winner
@@ -242,11 +242,19 @@ winnerDecoder =
                     "NoWinner" ->
                         JD.succeed NoWinner
 
-                    "HorizontalWinner" ->
-                        JD.succeed HorizontalWinner
+                    "ZephyrusWinner" ->
+                        JD.succeed ZephyrusWinner
 
+                    -- Backward compatibility
+                    "HorizontalWinner" ->
+                        JD.succeed ZephyrusWinner
+
+                    "NotusWinner" ->
+                        JD.succeed NotusWinner
+
+                    --  Backward compatibility
                     "VerticalWinner" ->
-                        JD.succeed VerticalWinner
+                        JD.succeed NotusWinner
 
                     _ ->
                         JD.fail <| "Unknown winner: " ++ s

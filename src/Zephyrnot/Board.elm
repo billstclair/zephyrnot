@@ -209,16 +209,16 @@ winner player board =
     in
     if hwin && vwin then
         if player == Zephyrus then
-            ( HorizontalWinner, hpath )
+            ( ZephyrusWinner, hpath )
 
         else
-            ( VerticalWinner, vpath )
+            ( NotusWinner, vpath )
 
     else if hwin then
-        ( HorizontalWinner, hpath )
+        ( ZephyrusWinner, hpath )
 
     else if vwin then
-        ( VerticalWinner, vpath )
+        ( NotusWinner, vpath )
 
     else
         ( NoWinner, [] )
