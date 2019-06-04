@@ -523,9 +523,9 @@ doClick row col model =
                     else
                         ( NoDecoration
                         , NoDecoration
-                        , ( cellName ( r, c ) :: model.moves
+                        , ( List.concat [ model.moves, [ cellName ( r, c ) ] ]
                           , Board.set r c model.board
-                          , otherPlayer model.player
+                          , Types.otherPlayer model.player
                           )
                         )
             in
@@ -694,15 +694,6 @@ doClick row col model =
 cellName : ( Int, Int ) -> String
 cellName ( rowidx, colidx ) =
     Board.colToString colidx ++ Board.rowToString rowidx
-
-
-otherPlayer : Player -> Player
-otherPlayer player =
-    if player == Zephyrus then
-        Notus
-
-    else
-        Zephyrus
 
 
 subscriptions : Model -> Sub Msg
@@ -929,7 +920,7 @@ mainPage bsize model =
             ]
         , p []
             [ text "Moves: "
-            , text <| movesToString (List.reverse model.moves)
+            , text <| movesToString model.moves
             ]
         , p []
             [ a

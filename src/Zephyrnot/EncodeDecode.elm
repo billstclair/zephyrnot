@@ -410,29 +410,21 @@ playerNamesDecoder =
 
 
 encodePrivateGameState : PrivateGameState -> Value
-encodePrivateGameState { receivedPlacement } =
+encodePrivateGameState { decoration } =
     JE.object
-        [ ( "receivedPlacement"
-          , case receivedPlacement of
-                Nothing ->
-                    JE.null
-
-                Just choice ->
-                    encodeChoice choice
-          )
-        ]
+        [ ( "decoration", encodeDecoration decoration ) ]
 
 
 privateGameStateDecoder : Decoder PrivateGameState
 privateGameStateDecoder =
     JD.succeed PrivateGameState
-        |> required "receivedPlacement" (JD.nullable choiceDecoder)
+        |> required "decoration" decorationDecoder
 
 
 encodeGameState : Bool -> GameState -> Value
 encodeGameState includePrivate gameState =
     let
-        { board, moves, players, whoseTurn, score, winner } =
+        { board, moves, players, whoseTurn, score, winner, path } =
             gameState
     in
     JE.object
@@ -442,6 +434,7 @@ encodeGameState includePrivate gameState =
         , ( "whoseTurn", encodePlayer whoseTurn )
         , ( "score", encodeScore score )
         , ( "winner", encodeWinner winner )
+        , ( "path", JE.list encodeIntPair path )
         , ( "private"
           , (if includePrivate then
                 gameState.private
@@ -463,6 +456,7 @@ gameStateDecoder =
         |> required "whoseTurn" playerDecoder
         |> required "score" scoreDecoder
         |> required "winner" winnerDecoder
+        |> required "path" (JD.list intPairDecoder)
         |> required "private" privateGameStateDecoder
 
 
@@ -581,17 +575,34 @@ messageEncoderInternal includePrivate message =
               ]
             )
 
-        PlayRsp { gameid, placement } ->
+        PlayRsp { gameid, gameState, decoration } ->
             ( Rsp "play"
             , [ ( "gameid", JE.string gameid )
-              , ( "placement", encodeChoice placement )
+              , ( "gameState", encodeGameState includePrivate gameState )
+              , ( "decoration", encodeDecoration decoration )
               ]
             )
 
-        GameOverRsp { gameid, winner } ->
+        ResignRsp { gameid, gameState, player } ->
+            ( Rsp "resign"
+            , [ ( "gameid", JE.string gameid )
+              , ( "gameState", encodeGameState includePrivate gameState )
+              , ( "player", encodePlayer player )
+              ]
+            )
+
+        AnotherGameRsp { gameid, gameState, player } ->
+            ( Rsp "anotherGame"
+            , [ ( "gameid", JE.string gameid )
+              , ( "gameState", encodeGameState includePrivate gameState )
+              , ( "player", encodePlayer player )
+              ]
+            )
+
+        GameOverRsp { gameid, gameState } ->
             ( Rsp "gameOver"
             , [ ( "gameid", JE.string gameid )
-              , ( "winner", encodeWinner winner )
+              , ( "gameState", encodeGameState includePrivate gameState )
               ]
             )
 
@@ -757,27 +768,59 @@ updateRspDecoder =
 playRspDecoder : Decoder Message
 playRspDecoder =
     JD.succeed
-        (\gameid placement ->
+        (\gameid gameState decoration ->
             PlayRsp
                 { gameid = gameid
-                , placement = placement
+                , gameState = gameState
+                , decoration = decoration
                 }
         )
         |> required "gameid" JD.string
-        |> required "placement" choiceDecoder
+        |> required "gameState" gameStateDecoder
+        |> required "decoration" decorationDecoder
+
+
+resignRspDecoder : Decoder Message
+resignRspDecoder =
+    JD.succeed
+        (\gameid gameState player ->
+            ResignRsp
+                { gameid = gameid
+                , gameState = gameState
+                , player = player
+                }
+        )
+        |> required "gameid" JD.string
+        |> required "gameState" gameStateDecoder
+        |> required "player" playerDecoder
+
+
+anotherGameRspDecoder : Decoder Message
+anotherGameRspDecoder =
+    JD.succeed
+        (\gameid gameState player ->
+            AnotherGameRsp
+                { gameid = gameid
+                , gameState = gameState
+                , player = player
+                }
+        )
+        |> required "gameid" JD.string
+        |> required "gameState" gameStateDecoder
+        |> required "player" playerDecoder
 
 
 gameOverRspDecoder : Decoder Message
 gameOverRspDecoder =
     JD.succeed
-        (\gameid winner ->
+        (\gameid gameState ->
             GameOverRsp
                 { gameid = gameid
-                , winner = winner
+                , gameState = gameState
                 }
         )
         |> required "gameid" JD.string
-        |> required "winner" winnerDecoder
+        |> required "gameState" gameStateDecoder
 
 
 errorRspDecoder : Decoder Message
@@ -850,6 +893,12 @@ messageDecoder ( reqrsp, plist ) =
 
                 "play" ->
                     decodePlist playRspDecoder plist
+
+                "resign" ->
+                    decodePlist resignRspDecoder plist
+
+                "anotherGame" ->
+                    decodePlist anotherGameRspDecoder plist
 
                 "gameOver" ->
                     decodePlist gameOverRspDecoder plist

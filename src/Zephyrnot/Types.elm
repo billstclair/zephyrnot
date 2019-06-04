@@ -22,9 +22,11 @@ module Zephyrnot.Types exposing
     , PrivateGameState
     , SavedModel
     , Score
+    , ServerState
     , Winner(..)
     , emptyPrivateGameState
     , messageToString
+    , otherPlayer
     , zeroScore
     )
 
@@ -44,6 +46,15 @@ type alias Board =
 type Player
     = Zephyrus -- Choose column
     | Notus -- Choose row
+
+
+otherPlayer : Player -> Player
+otherPlayer player =
+    if player == Zephyrus then
+        Notus
+
+    else
+        Zephyrus
 
 
 type Winner
@@ -100,13 +111,13 @@ type alias SavedModel =
 
 
 type alias PrivateGameState =
-    { receivedPlacement : Maybe Choice
+    { decoration : Decoration
     }
 
 
 emptyPrivateGameState : PrivateGameState
 emptyPrivateGameState =
-    PrivateGameState Nothing
+    PrivateGameState NoDecoration
 
 
 type alias GameState =
@@ -116,9 +127,8 @@ type alias GameState =
     , whoseTurn : Player
     , score : Score
     , winner : Winner
-
-    -- not sent over the wire
-    , private : PrivateGameState
+    , path : List ( Int, Int )
+    , private : PrivateGameState --not sent over the wire
     }
 
 
@@ -172,11 +182,22 @@ type Message
         }
     | PlayRsp
         { gameid : GameId
-        , placement : Choice
+        , gameState : GameState
+        , decoration : Decoration
+        }
+    | ResignRsp
+        { gameid : GameId
+        , gameState : GameState
+        , player : Player
+        }
+    | AnotherGameRsp
+        { gameid : GameId
+        , gameState : GameState
+        , player : Player
         }
     | GameOverRsp
         { gameid : GameId
-        , winner : Winner
+        , gameState : GameState
         }
       -- Errors
     | ErrorRsp
@@ -228,6 +249,12 @@ messageToString message =
         PlayRsp _ ->
             "PlayRsp"
 
+        ResignRsp _ ->
+            "ResignRsp"
+
+        AnotherGameRsp _ ->
+            "AnotherGameRsp"
+
         GameOverRsp _ ->
             "GameOverRsp"
 
@@ -239,3 +266,7 @@ messageToString message =
 
         ChatRsp _ ->
             "ChatRsp"
+
+
+type alias ServerState =
+    WebSocketFramework.Types.ServerState GameState Player

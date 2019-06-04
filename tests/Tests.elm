@@ -13,6 +13,7 @@ import Zephyrnot.Types as Types
     exposing
         ( Board
         , Choice(..)
+        , Decoration(..)
         , GameState
         , Message(..)
         , Player(..)
@@ -164,35 +165,41 @@ protocolData =
         }
     , PlayRsp
         { gameid = "77"
-        , placement = ChooseRow 2
+        , gameState = gameState1
+        , decoration = RowSelectedDecoration 2
         }
     , PlayRsp
         { gameid = "78"
-        , placement = ChooseCol 2
+        , gameState = gameState2
+        , decoration = ColSelectedDecoration 2
         }
-    , PlayRsp
+    , ResignRsp
         { gameid = "79"
-        , placement = ChooseResign Zephyrus
+        , gameState = { gameState3 | winner = VerticalWinner }
+        , player = Zephyrus
         }
-    , PlayRsp
+    , ResignRsp
         { gameid = "79"
-        , placement = ChooseResign Notus
+        , gameState = { gameState3 | winner = HorizontalWinner }
+        , player = Notus
         }
-    , PlayRsp
+    , AnotherGameRsp
         { gameid = "80"
-        , placement = ChooseNew Zephyrus
+        , gameState = gameState1
+        , player = Zephyrus
         }
-    , PlayRsp
+    , AnotherGameRsp
         { gameid = "80"
-        , placement = ChooseNew Notus
+        , gameState = gameState2
+        , player = Notus
         }
     , GameOverRsp
         { gameid = "80"
-        , winner = HorizontalWinner
+        , gameState = { gameState1 | winner = HorizontalWinner }
         }
     , GameOverRsp
         { gameid = "80"
-        , winner = VerticalWinner
+        , gameState = { gameState2 | winner = VerticalWinner }
         }
     , ErrorRsp
         { request = "request"
@@ -310,7 +317,8 @@ gameState1 =
     , whoseTurn = Zephyrus
     , score = score1
     , winner = NoWinner
-    , private = { receivedPlacement = Just (ChooseRow 0) }
+    , path = []
+    , private = { decoration = RowSelectedDecoration 0 }
     }
 
 
@@ -321,7 +329,8 @@ gameState2 =
     , whoseTurn = Notus
     , score = score1
     , winner = HorizontalWinner
-    , private = { receivedPlacement = Just (ChooseCol 2) }
+    , path = [ ( 1, 2 ), ( 2, 3 ) ]
+    , private = { decoration = ColSelectedDecoration 2 }
     }
 
 
@@ -332,8 +341,13 @@ gameState3 =
     , whoseTurn = Notus
     , score = score2
     , winner = VerticalWinner
-    , private = { receivedPlacement = Nothing }
+    , path = [ ( 1, 2 ), ( 2, 3 ) ]
+    , private = { decoration = NoDecoration }
     }
+
+
+gameState4 =
+    { gameState3 | private = { decoration = AlreadyFilledDecoration ( 0, 2 ) } }
 
 
 gameStateData : List GameState
