@@ -108,19 +108,41 @@ import Svg.Events
 import Task
 import Time exposing (Posix)
 import Url exposing (Url)
+import WebSocketFramework.ServerInterface as ServerInterface
+import WebSocketFramework.Types
+    exposing
+        ( EncodeDecode
+        , MessageDecoder
+        , MessageEncoder
+        , ReqRsp(..)
+        , ServerInterface(..)
+        , ServerMessageProcessor
+        )
 import Zephyrnot.Board as Board exposing (SizerKind(..))
 import Zephyrnot.EncodeDecode as ED
+import Zephyrnot.Interface as Interface
 import Zephyrnot.Types as Types
     exposing
         ( Board
         , Decoration(..)
+        , GameState
+        , Message(..)
         , Page(..)
         , Player(..)
+        , PlayerNames
         , SavedModel
         , Score
         , Winner(..)
         , zeroScore
         )
+
+
+type alias SimulatorState =
+    { gameCount : Int
+    , gameCountString : String
+    , gamesLeft : Int
+    , simulatorResult : SimulatorResult
+    }
 
 
 type alias SimulatorResult =
@@ -131,14 +153,17 @@ type alias SimulatorResult =
     }
 
 
+type alias ServerInterface =
+    WebSocketFramework.Types.ServerInterface GameState Player Message Msg
+
+
 type alias Model =
-    { key : Key
+    { interface : ServerInterface
+    , gs : GameState
+    , key : Key
     , windowSize : ( Int, Int )
-    , started : Bool
-    , gameCount : Int
-    , gameCountString : String
-    , gamesLeft : Int
-    , simulatorResult : SimulatorResult
+    , started : Bool --True when persistent storage is available
+    , simulatorState : SimulatorState --for the "Aux"  page
     , seed : Seed
 
     -- persistent below here
@@ -157,6 +182,7 @@ type alias Model =
 
 type Msg
     = Noop
+    | IncomingMessage Bool ServerInterface Message
     | SetDecoration Decoration
     | SetChooseFirst Player
     | SetPage Page
@@ -202,15 +228,37 @@ initializeBoard board =
         |> Board.set 4 5
 
 
+encodeDecode : EncodeDecode Message
+encodeDecode =
+    { encoder = ED.messageEncoder
+    , decoder = ED.messageDecoder
+    , errorWrapper = Nothing
+    }
+
+
+fullProcessor : ServerMessageProcessor GameState Player Message
+fullProcessor =
+    ServerInterface.fullMessageProcessor encodeDecode Interface.messageProcessor
+
+
+proxyServer : ServerInterface
+proxyServer =
+    ServerInterface.makeProxyServer fullProcessor (IncomingMessage True)
+
+
 init : Value -> Url -> Key -> ( Model, Cmd Msg )
 init flags url key =
-    { key = key
+    { interface = proxyServer
+    , gs = Interface.emptyGameState (PlayerNames "" "")
+    , key = key
     , windowSize = ( 0, 0 )
     , started = False
-    , gameCount = 1000
-    , gameCountString = "1000"
-    , gamesLeft = 0
-    , simulatorResult = SimulatorResult 0 0 0 0
+    , simulatorState =
+        { gameCount = 1000
+        , gameCountString = "1000"
+        , gamesLeft = 0
+        , simulatorResult = SimulatorResult 0 0 0 0
+        }
     , seed = Random.initialSeed 0 --get time for this
     , page = MainPage
     , decoration = NoDecoration
@@ -313,6 +361,11 @@ savedModelToModel savedModel model =
     }
 
 
+incomingMessage : Bool -> ServerInterface -> Message -> Model -> ( Model, Cmd Msg )
+incomingMessage addToMessages interface message model =
+    model |> withNoCmd
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let
@@ -335,6 +388,9 @@ updateInternal msg model =
     case msg of
         Noop ->
             model |> withNoCmd
+
+        IncomingMessage addToMessages interface message ->
+            incomingMessage addToMessages interface message model
 
         SetDecoration decoration ->
             { model | decoration = decoration }
@@ -372,25 +428,38 @@ updateInternal msg model =
                 doClick row col model
 
         SetGameCount string ->
+            let
+                simulatorState =
+                    model.simulatorState
+            in
             { model
-                | gameCount =
-                    String.toInt string
-                        |> Maybe.withDefault model.gameCount
+                | simulatorState =
+                    { simulatorState
+                        | gameCount =
+                            String.toInt string
+                                |> Maybe.withDefault simulatorState.gameCount
+                    }
             }
                 |> withNoCmd
 
         ToggleSimulator ->
             let
+                simulatorState =
+                    model.simulatorState
+
                 gamesLeft =
-                    if model.gamesLeft == 0 then
-                        model.gameCount
+                    if simulatorState.gamesLeft == 0 then
+                        simulatorState.gameCount
 
                     else
                         0
             in
             { model
-                | gamesLeft = gamesLeft
-                , simulatorResult = SimulatorResult 0 0 0 0
+                | simulatorState =
+                    { simulatorState
+                        | gamesLeft = gamesLeft
+                        , simulatorResult = SimulatorResult 0 0 0 0
+                    }
             }
                 |> withCmd
                     (if gamesLeft > 0 then
@@ -402,8 +471,11 @@ updateInternal msg model =
 
         SimulatorStep ->
             let
+                simulatorState =
+                    model.simulatorState
+
                 count =
-                    model.gamesLeft
+                    simulatorState.gamesLeft
 
                 loop seed left c1 c2 s1 s2 =
                     if left <= 0 then
@@ -428,10 +500,10 @@ updateInternal msg model =
                         loop seed2 (left - 1) c12 c22 s12 s22
 
                 gamesLeft =
-                    model.gamesLeft - count
+                    simulatorState.gamesLeft - count
 
                 oldResult =
-                    model.simulatorResult
+                    simulatorState.simulatorResult
 
                 ( newResult, newSeed ) =
                     loop model.seed count 0 0 0 0
@@ -448,8 +520,11 @@ updateInternal msg model =
                     }
             in
             { model
-                | simulatorResult = simulatorResult
-                , gamesLeft = gamesLeft
+                | simulatorState =
+                    { simulatorState
+                        | simulatorResult = simulatorResult
+                        , gamesLeft = gamesLeft
+                    }
                 , seed = newSeed
             }
                 |> withCmd
@@ -1190,8 +1265,11 @@ move. Will you be able to predict the wind?
 auxPage : Int -> Model -> Html Msg
 auxPage bsize model =
     let
+        simulatorState =
+            model.simulatorState
+
         { horizontalWins, verticalWins, horizontalScore, verticalScore } =
-            model.simulatorResult
+            simulatorState.simulatorResult
 
         locale =
             { usLocale | decimals = 1 }
@@ -1216,14 +1294,14 @@ auxPage bsize model =
             [ b "Game Count: "
             , input
                 [ onInput SetGameCount
-                , value model.gameCountString
+                , value simulatorState.gameCountString
                 , size 4
                 ]
                 []
             , text " "
             , button
                 [ onClick ToggleSimulator ]
-                [ if model.gamesLeft > 0 then
+                [ if simulatorState.gamesLeft > 0 then
                     text "Stop"
 
                   else

@@ -243,7 +243,7 @@ messageProcessor state message =
                                 _ ->
                                     let
                                         gs =
-                                            emptyGameState <| gameState.players
+                                            emptyGameState gameState.players
                                     in
                                     ( ServerInterface.updateGame gameid gs state
                                     , Just <|
