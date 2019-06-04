@@ -78,11 +78,7 @@ encodeSavedModel model =
         , ( "firstSelection", encodeDecoration model.firstSelection )
         , ( "chooseFirst", encodePlayer model.chooseFirst )
         , ( "player", encodePlayer model.player )
-        , ( "winner", encodeWinner model.winner )
-        , ( "path", JE.list encodeIntPair model.path )
-        , ( "moves", encodeMoves model.moves )
-        , ( "board", encodeBoard model.board )
-        , ( "score", encodeScore model.score )
+        , ( "gameState", encodeGameState True model.gameState )
         ]
 
 
@@ -99,11 +95,7 @@ savedModelDecoder =
         |> required "firstSelection" decorationDecoder
         |> required "chooseFirst" playerDecoder
         |> required "player" playerDecoder
-        |> required "winner" winnerDecoder
-        |> required "path" (JD.list intPairDecoder)
-        |> required "moves" movesDecoder
-        |> required "board" boardDecoder
-        |> optional "score" scoreDecoder Types.zeroScore
+        |> required "gameState" gameStateDecoder
 
 
 encodePage : Page -> Value

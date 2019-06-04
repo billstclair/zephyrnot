@@ -96,11 +96,7 @@ type alias SavedModel =
     , firstSelection : Decoration
     , chooseFirst : Player
     , player : Player
-    , winner : Winner
-    , path : List ( Int, Int )
-    , moves : List String
-    , board : Board
-    , score : Score
+    , gameState : GameState
     }
 
 

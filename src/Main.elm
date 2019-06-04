@@ -112,8 +112,10 @@ import WebSocketFramework.ServerInterface as ServerInterface
 import WebSocketFramework.Types
     exposing
         ( EncodeDecode
+        , GameId
         , MessageDecoder
         , MessageEncoder
+        , PlayerId
         , ReqRsp(..)
         , ServerInterface(..)
         , ServerMessageProcessor
@@ -159,7 +161,10 @@ type alias ServerInterface =
 
 type alias Model =
     { interface : ServerInterface
-    , gs : GameState
+    , gameState : GameState
+    , gameid : GameId
+    , playerid : PlayerId
+    , otherPlayerid : PlayerId
     , key : Key
     , windowSize : ( Int, Int )
     , started : Bool --True when persistent storage is available
@@ -172,11 +177,6 @@ type alias Model =
     , firstSelection : Decoration
     , chooseFirst : Player
     , player : Player
-    , winner : Winner
-    , path : List ( Int, Int )
-    , moves : List String
-    , board : Board
-    , score : Score
     }
 
 
@@ -249,7 +249,10 @@ proxyServer =
 init : Value -> Url -> Key -> ( Model, Cmd Msg )
 init flags url key =
     { interface = proxyServer
-    , gs = Interface.emptyGameState (PlayerNames "" "")
+    , gameState = Interface.emptyGameState (PlayerNames "" "")
+    , gameid = ""
+    , playerid = ""
+    , otherPlayerid = ""
     , key = key
     , windowSize = ( 0, 0 )
     , started = False
@@ -265,11 +268,6 @@ init flags url key =
     , firstSelection = NoDecoration
     , chooseFirst = Zephyrus
     , player = Zephyrus
-    , winner = NoWinner
-    , path = []
-    , moves = []
-    , board = Board.empty
-    , score = zeroScore
     }
         |> withCmds
             [ Task.perform getViewport Dom.getViewport
@@ -337,11 +335,7 @@ modelToSavedModel model =
     , firstSelection = model.firstSelection
     , chooseFirst = model.chooseFirst
     , player = model.player
-    , winner = model.winner
-    , path = model.path
-    , moves = model.moves
-    , board = model.board
-    , score = model.score
+    , gameState = model.gameState
     }
 
 
@@ -353,11 +347,7 @@ savedModelToModel savedModel model =
         , firstSelection = savedModel.firstSelection
         , chooseFirst = savedModel.chooseFirst
         , player = savedModel.player
-        , winner = savedModel.winner
-        , path = savedModel.path
-        , moves = savedModel.moves
-        , board = savedModel.board
-        , score = savedModel.score
+        , gameState = savedModel.gameState
     }
 
 
@@ -385,6 +375,10 @@ update msg model =
 
 updateInternal : Msg -> Model -> ( Model, Cmd Msg )
 updateInternal msg model =
+    let
+        gameState =
+            model.gameState
+    in
     case msg of
         Noop ->
             model |> withNoCmd
@@ -405,23 +399,31 @@ updateInternal msg model =
                 |> withNoCmd
 
         ResetScore ->
-            { model | score = Types.zeroScore }
+            { model
+                | gameState =
+                    { gameState
+                        | score = Types.zeroScore
+                    }
+            }
                 |> withNoCmd
 
         NewGame ->
             { model
-                | board = Board.empty
-                , decoration = NoDecoration
+                | decoration = NoDecoration
                 , firstSelection = NoDecoration
                 , player = Zephyrus
-                , winner = NoWinner
-                , path = []
-                , moves = []
+                , gameState =
+                    { gameState
+                        | board = Board.empty
+                        , winner = NoWinner
+                        , path = []
+                        , moves = []
+                    }
             }
                 |> withNoCmd
 
         Click ( row, col ) ->
-            if model.winner /= NoWinner then
+            if gameState.winner /= NoWinner then
                 model |> withNoCmd
 
             else
@@ -583,24 +585,27 @@ simulatorStepCmd x =
 doClick : Int -> Int -> Model -> ( Model, Cmd Msg )
 doClick row col model =
     let
+        gameState =
+            model.gameState
+
         makeMove r c =
             let
                 filled =
-                    Board.get r c model.board
+                    Board.get r c gameState.board
 
                 ( firstSelection, decoration, ( moves, board, player ) ) =
                     if filled then
                         ( model.firstSelection
                         , AlreadyFilledDecoration ( r, c )
-                        , ( model.moves, model.board, model.player )
+                        , ( gameState.moves, gameState.board, gameState.whoseTurn )
                         )
 
                     else
                         ( NoDecoration
                         , NoDecoration
-                        , ( List.concat [ model.moves, [ cellName ( r, c ) ] ]
-                          , Board.set r c model.board
-                          , Types.otherPlayer model.player
+                        , ( List.concat [ gameState.moves, [ cellName ( r, c ) ] ]
+                          , Board.set r c gameState.board
+                          , Types.otherPlayer gameState.whoseTurn
                           )
                         )
             in
@@ -608,8 +613,11 @@ doClick row col model =
                 | firstSelection = firstSelection
                 , decoration = decoration
                 , player = player
-                , moves = moves
-                , board = board
+                , gameState =
+                    { gameState
+                        | moves = moves
+                        , board = board
+                    }
             }
 
         mdl =
@@ -636,7 +644,7 @@ doClick row col model =
                                         Notus ->
                                             ( row, ac )
                             in
-                            if Board.get r c model.board then
+                            if Board.get r c gameState.board then
                                 { model
                                     | decoration =
                                         AlreadyFilledDecoration ( r, c )
@@ -673,7 +681,7 @@ doClick row col model =
                                         Notus ->
                                             ( row, ac )
                             in
-                            if Board.get r c model.board then
+                            if Board.get r c gameState.board then
                                 { model
                                     | decoration =
                                         AlreadyFilledDecoration ( r, c )
@@ -733,35 +741,44 @@ doClick row col model =
                         _ ->
                             model
 
+        gs =
+            mdl.gameState
+
+        newBoard =
+            gs.board
+
         ( winner, path ) =
-            Board.winner model.player mdl.board
+            Board.winner model.player newBoard
 
         score =
-            model.score
+            mdl.gameState.score
     in
     { mdl
-        | winner = winner
-        , path = path
-        , score =
-            case winner of
-                ZephyrusWinner ->
-                    { score
-                        | zephyrusGames =
-                            score.zephyrusGames + 1
-                        , zephyrusScore =
-                            score.zephyrusScore + Board.score mdl.board
-                    }
+        | gameState =
+            { gs
+                | winner = winner
+                , path = path
+                , score =
+                    case winner of
+                        ZephyrusWinner ->
+                            { score
+                                | zephyrusGames =
+                                    score.zephyrusGames + 1
+                                , zephyrusScore =
+                                    score.zephyrusScore + Board.score newBoard
+                            }
 
-                NotusWinner ->
-                    { score
-                        | notusGames =
-                            score.notusGames + 1
-                        , notusScore =
-                            score.notusScore + Board.score mdl.board
-                    }
+                        NotusWinner ->
+                            { score
+                                | notusGames =
+                                    score.notusGames + 1
+                                , notusScore =
+                                    score.notusScore + Board.score newBoard
+                            }
 
-                _ ->
-                    score
+                        _ ->
+                            score
+            }
     }
         |> withNoCmd
 
@@ -847,14 +864,17 @@ view model =
 mainPage : Int -> Model -> Html Msg
 mainPage bsize model =
     let
+        gameState =
+            model.gameState
+
         score =
-            model.score
+            gameState.score
 
         count =
-            Board.count model.board
+            Board.count gameState.board
 
         message =
-            case model.winner of
+            case gameState.winner of
                 ZephyrusWinner ->
                     "Zephyrus wins in " ++ String.fromInt count ++ "!"
 
@@ -922,27 +942,27 @@ mainPage bsize model =
             Click
             (Just <| Board.getSizer DefaultSizer)
             model.decoration
-            model.path
-            model.board
+            gameState.path
+            gameState.board
         , p
             []
             [ span
                 [ style "color"
-                    (if model.winner == NoWinner then
+                    (if gameState.winner == NoWinner then
                         "red"
 
                      else
                         "orange"
                     )
                 , style "font-weight"
-                    (if model.winner == NoWinner then
+                    (if gameState.winner == NoWinner then
                         "normal"
 
                      else
                         "bold"
                     )
                 , style "font-size"
-                    (if model.winner == NoWinner then
+                    (if gameState.winner == NoWinner then
                         "100%"
 
                      else
@@ -951,7 +971,7 @@ mainPage bsize model =
                 ]
                 [ text message ]
             , br
-            , if model.winner /= NoWinner then
+            , if gameState.winner /= NoWinner then
                 text ""
 
               else
@@ -995,7 +1015,7 @@ mainPage bsize model =
             ]
         , p []
             [ text "Moves: "
-            , text <| movesToString model.moves
+            , text <| movesToString gameState.moves
             ]
         , p []
             [ a
