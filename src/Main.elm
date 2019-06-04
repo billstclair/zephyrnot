@@ -182,7 +182,7 @@ type alias Model =
 
 type Msg
     = Noop
-    | IncomingMessage Bool ServerInterface Message
+    | IncomingMessage ServerInterface Message
     | SetDecoration Decoration
     | SetChooseFirst Player
     | SetPage Page
@@ -243,36 +243,70 @@ fullProcessor =
 
 proxyServer : ServerInterface
 proxyServer =
-    ServerInterface.makeProxyServer fullProcessor (IncomingMessage True)
+    ServerInterface.makeProxyServer fullProcessor IncomingMessage
+
+
+isSimulated : Model -> Bool
+isSimulated model =
+    case model.interface of
+        ServerInterface { wrapper } ->
+            wrapper == IncomingMessage
 
 
 init : Value -> Url -> Key -> ( Model, Cmd Msg )
 init flags url key =
-    { interface = proxyServer
-    , gameState = Interface.emptyGameState (PlayerNames "" "")
-    , gameid = ""
-    , playerid = ""
-    , otherPlayerid = ""
-    , key = key
-    , windowSize = ( 0, 0 )
-    , started = False
-    , simulatorState =
-        { gameCount = 1000
-        , gameCountString = "1000"
-        , gamesLeft = 0
-        , simulatorResult = SimulatorResult 0 0 0 0
-        }
-    , seed = Random.initialSeed 0 --get time for this
-    , page = MainPage
-    , decoration = NoDecoration
-    , firstSelection = NoDecoration
-    , chooseFirst = Zephyrus
-    , player = Zephyrus
-    }
+    let
+        model =
+            { interface = proxyServer
+            , gameState = Debug.log "init" <| Interface.emptyGameState (PlayerNames "" "")
+            , gameid = ""
+            , playerid = ""
+            , otherPlayerid = ""
+            , key = key
+            , windowSize = ( 0, 0 )
+            , started = False
+            , simulatorState =
+                { gameCount = 1000
+                , gameCountString = "1000"
+                , gamesLeft = 0
+                , simulatorResult = SimulatorResult 0 0 0 0
+                }
+            , seed = Random.initialSeed 0 --get time for this
+            , page = MainPage
+            , decoration = NoDecoration
+            , firstSelection = NoDecoration
+            , chooseFirst = Zephyrus
+            , player = Zephyrus
+            }
+    in
+    model
         |> withCmds
             [ Task.perform getViewport Dom.getViewport
             , Task.perform InitializeSeed Time.now
+            , send model initialNewReq
             ]
+
+
+type alias NewReqBody =
+    { name : String
+    , player : Player
+    , isPublic : Bool
+    , restoreState : Maybe GameState
+    }
+
+
+initialNewReqBody : NewReqBody
+initialNewReqBody =
+    { name = "Zephyrus"
+    , player = Zephyrus
+    , isPublic = False
+    , restoreState = Nothing
+    }
+
+
+initialNewReq : Message
+initialNewReq =
+    NewReq initialNewReqBody
 
 
 getViewport : Viewport -> Msg
@@ -318,8 +352,20 @@ storageHandler response state model =
                                     mdl |> withCmd cmd
 
                                 Ok savedModel ->
-                                    savedModelToModel savedModel mdl
-                                        |> withCmd cmd
+                                    let
+                                        mdl2 =
+                                            savedModelToModel savedModel mdl
+                                    in
+                                    mdl2
+                                        |> withCmds
+                                            [ cmd
+                                            , send mdl2 <|
+                                                NewReq
+                                                    { initialNewReqBody
+                                                        | restoreState =
+                                                            Just mdl2.gameState
+                                                    }
+                                            ]
 
                 _ ->
                     mdl |> withCmd cmd
@@ -348,12 +394,93 @@ savedModelToModel savedModel model =
         , chooseFirst = savedModel.chooseFirst
         , player = savedModel.player
         , gameState = savedModel.gameState
+        , interface = proxyServer
+        , gameid = ""
+        , playerid = ""
+        , otherPlayerid = ""
     }
 
 
-incomingMessage : Bool -> ServerInterface -> Message -> Model -> ( Model, Cmd Msg )
-incomingMessage addToMessages interface message model =
-    model |> withNoCmd
+incomingMessage : ServerInterface -> Message -> Model -> ( Model, Cmd Msg )
+incomingMessage interface message mdl =
+    let
+        model =
+            { mdl | interface = interface }
+    in
+    case Debug.log "incomingMessage" message of
+        NewRsp { gameid, playerid, player, name } ->
+            let
+                ( pid, opid ) =
+                    if player == Zephyrus then
+                        ( playerid, model.otherPlayerid )
+
+                    else
+                        ( model.playerid, playerid )
+            in
+            { model
+                | gameid = gameid
+                , playerid = pid
+                , otherPlayerid = opid
+            }
+                |> withCmd
+                    (if player == Zephyrus then
+                        send model <|
+                            JoinReq { gameid = gameid, name = "Notus" }
+
+                     else
+                        Cmd.none
+                    )
+
+        JoinRsp { gameid, playerid, player, gameState } ->
+            { model
+                | otherPlayerid = playerid
+                , gameState = gameState
+            }
+                |> withNoCmd
+
+        LeaveRsp { gameid } ->
+            -- Leave only happens with a network server
+            model |> withNoCmd
+
+        UpdateRsp { gameid, gameState } ->
+            { model | gameState = gameState }
+                |> withNoCmd
+
+        PlayRsp { gameid, gameState, decoration } ->
+            { model
+                | gameState = gameState
+                , decoration = decoration
+            }
+                |> withNoCmd
+
+        ResignRsp { gameid, gameState, player } ->
+            -- We dont' send `ChooseResign` yet.
+            model |> withNoCmd
+
+        AnotherGameRsp { gameid, gameState, player } ->
+            { model | gameState = gameState }
+                |> withNoCmd
+
+        GameOverRsp { gameid, gameState } ->
+            { model | gameState = gameState }
+                |> withNoCmd
+
+        ErrorRsp { request, text } ->
+            let
+                req =
+                    Debug.log "Error, request:" request
+
+                txt =
+                    Debug.log "  text:" text
+            in
+            model |> withNoCmd
+
+        ChatRsp { gameid, name, text } ->
+            -- No chat yet
+            model |> withNoCmd
+
+        _ ->
+            model |> withNoCmd
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -383,8 +510,8 @@ updateInternal msg model =
         Noop ->
             model |> withNoCmd
 
-        IncomingMessage addToMessages interface message ->
-            incomingMessage addToMessages interface message model
+        IncomingMessage interface message ->
+            incomingMessage interface message model
 
         SetDecoration decoration ->
             { model | decoration = decoration }
@@ -399,13 +526,42 @@ updateInternal msg model =
                 |> withNoCmd
 
         ResetScore ->
-            { model
-                | gameState =
-                    { gameState
-                        | score = Types.zeroScore
-                    }
-            }
-                |> withNoCmd
+            if not <| isSimulated model then
+                model |> withNoCmd
+
+            else
+                case model.interface of
+                    ServerInterface si ->
+                        case si.state of
+                            Nothing ->
+                                model |> withNoCmd
+
+                            Just s ->
+                                case si.state of
+                                    Nothing ->
+                                        model |> withNoCmd
+
+                                    Just state ->
+                                        let
+                                            gs =
+                                                { gameState
+                                                    | score = Types.zeroScore
+                                                }
+                                        in
+                                        { model
+                                            | gameState = gs
+                                            , interface =
+                                                ServerInterface
+                                                    { si
+                                                        | state =
+                                                            Just <|
+                                                                ServerInterface.updateGame
+                                                                    model.gameid
+                                                                    gs
+                                                                    state
+                                                    }
+                                        }
+                                            |> withNoCmd
 
         NewGame ->
             { model
@@ -575,6 +731,11 @@ updateInternal msg model =
 
                 Ok res ->
                     res
+
+
+send : Model -> Message -> Cmd Msg
+send model message =
+    ServerInterface.send model.interface <| Debug.log "send" message
 
 
 simulatorStepCmd : () -> Cmd Msg
@@ -1006,8 +1167,12 @@ mainPage bsize model =
             , text "/"
             , text <| String.fromInt score.notusGames
             , text " "
-            , button [ onClick ResetScore ]
-                [ text "Reset" ]
+            , if not <| isSimulated model then
+                text ""
+
+              else
+                button [ onClick ResetScore ]
+                    [ text "Reset" ]
             , br
             , button
                 [ onClick NewGame ]

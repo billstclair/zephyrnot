@@ -25,7 +25,6 @@ module Zephyrnot.Types exposing
     , ServerState
     , Winner(..)
     , emptyPrivateGameState
-    , messageToString
     , otherPlayer
     , zeroScore
     )
@@ -210,58 +209,6 @@ type Message
         , name : String
         , text : String
         }
-
-
-messageToString : Message -> String
-messageToString message =
-    case message of
-        NewReq _ ->
-            "NewReq"
-
-        NewRsp _ ->
-            "NewRsp"
-
-        JoinReq _ ->
-            "JoinReq"
-
-        JoinRsp _ ->
-            "JoinRsp"
-
-        LeaveReq _ ->
-            "LeaveReq"
-
-        LeaveRsp _ ->
-            "LeaveRsp"
-
-        UpdateReq _ ->
-            "UpdateReq"
-
-        UpdateRsp _ ->
-            "UpdateRsp"
-
-        PlayReq _ ->
-            "PlayReq"
-
-        PlayRsp _ ->
-            "PlayRsp"
-
-        ResignRsp _ ->
-            "ResignRsp"
-
-        AnotherGameRsp _ ->
-            "AnotherGameRsp"
-
-        GameOverRsp _ ->
-            "GameOverRsp"
-
-        ErrorRsp _ ->
-            "ErrorRsp"
-
-        ChatReq _ ->
-            "ChatReq"
-
-        ChatRsp _ ->
-            "ChatRsp"
 
 
 type alias ServerState =

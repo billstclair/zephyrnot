@@ -15,6 +15,7 @@ module Zephyrnot.Interface exposing (emptyGameState, messageProcessor)
 
 import Debug
 import WebSocketFramework exposing (decodePlist, unknownMessage)
+import WebSocketFramework.EncodeDecode as WFED
 import WebSocketFramework.ServerInterface as ServerInterface
 import WebSocketFramework.Types
     exposing
@@ -59,7 +60,7 @@ errorRes message state text =
     ( state
     , Just <|
         ErrorRsp
-            { request = Types.messageToString message
+            { request = WFED.encodeMessage ED.messageEncoder message
             , text = text
             }
     )

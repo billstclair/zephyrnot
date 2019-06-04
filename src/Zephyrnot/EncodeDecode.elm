@@ -14,11 +14,13 @@ module Zephyrnot.EncodeDecode exposing
     ( boardToString
     , decodeSavedModel
     , encodeGameState
+    , encodeMoves
     , encodeSavedModel
     , gameStateDecoder
     , messageDecoder
     , messageEncoder
     , messageEncoderWithPrivate
+    , movesDecoder
     , stringToBoard
     )
 
@@ -65,7 +67,7 @@ movesDecoder =
     JD.oneOf
         [ JD.string
             |> JD.andThen
-                (String.split "," >> JD.succeed)
+                (String.split "," >> List.filter ((/=) "") >> JD.succeed)
         , JD.list JD.string --backward compatibility
         ]
 
