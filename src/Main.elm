@@ -126,6 +126,7 @@ import Zephyrnot.Interface as Interface
 import Zephyrnot.Types as Types
     exposing
         ( Board
+        , Choice(..)
         , Decoration(..)
         , GameState
         , Message(..)
@@ -188,6 +189,7 @@ type Msg
     | SetPage Page
     | ResetScore
     | NewGame
+    | ClearStorage
     | Click ( Int, Int )
     | SetGameCount String
     | ToggleSimulator
@@ -230,7 +232,7 @@ initializeBoard board =
 
 encodeDecode : EncodeDecode Message
 encodeDecode =
-    { encoder = ED.messageEncoder
+    { encoder = ED.messageEncoderWithPrivate
     , decoder = ED.messageDecoder
     , errorWrapper = Nothing
     }
@@ -253,7 +255,7 @@ isSimulated model =
             wrapper == IncomingMessage
 
 
-init : Value -> Url -> Key -> ( Model, Cmd Msg )
+init : Value -> url -> Key -> ( Model, Cmd Msg )
 init flags url key =
     let
         model =
@@ -443,26 +445,53 @@ incomingMessage interface message mdl =
             model |> withNoCmd
 
         UpdateRsp { gameid, gameState } ->
-            { model | gameState = gameState }
+            { model
+                | gameState = gameState
+                , decoration = NoDecoration
+                , firstSelection = NoDecoration
+            }
                 |> withNoCmd
 
         PlayRsp { gameid, gameState, decoration } ->
+            let
+                ( newDecoration, firstSelection ) =
+                    case decoration of
+                        AlreadyFilledDecoration _ ->
+                            ( decoration, model.firstSelection )
+
+                        _ ->
+                            ( NoDecoration, decoration )
+            in
             { model
                 | gameState = gameState
-                , decoration = decoration
+                , decoration = newDecoration
+                , firstSelection = firstSelection
             }
                 |> withNoCmd
 
         ResignRsp { gameid, gameState, player } ->
-            -- We dont' send `ChooseResign` yet.
-            model |> withNoCmd
+            { model
+                | gameState = gameState
+                , decoration = NoDecoration
+                , firstSelection = NoDecoration
+            }
+                |> withNoCmd
 
         AnotherGameRsp { gameid, gameState, player } ->
-            { model | gameState = gameState }
+            { model
+                | gameState = gameState
+                , decoration = NoDecoration
+                , firstSelection = NoDecoration
+                , player = player
+            }
                 |> withNoCmd
 
         GameOverRsp { gameid, gameState } ->
-            { model | gameState = gameState }
+            { model
+                | gameState = gameState
+                , decoration = NoDecoration
+                , firstSelection = NoDecoration
+            }
                 |> withNoCmd
 
         ErrorRsp { request, text } ->
@@ -488,11 +517,25 @@ update msg model =
     let
         ( mdl, cmd ) =
             updateInternal msg model
+
+        doSave =
+            case msg of
+                Click _ ->
+                    cmd == Cmd.none
+
+                IncomingMessage _ _ ->
+                    cmd == Cmd.none
+
+                ClearStorage ->
+                    False
+
+                _ ->
+                    True
     in
     mdl
         |> withCmds
             [ cmd
-            , if model.started then
+            , if model.started && doSave then
                 putModel mdl
 
               else
@@ -564,19 +607,37 @@ updateInternal msg model =
                                             |> withNoCmd
 
         NewGame ->
-            { model
-                | decoration = NoDecoration
-                , firstSelection = NoDecoration
-                , player = Zephyrus
-                , gameState =
-                    { gameState
-                        | board = Board.empty
-                        , winner = NoWinner
-                        , path = []
-                        , moves = []
-                    }
-            }
-                |> withNoCmd
+            let
+                ( playerid, placement ) =
+                    if gameState.winner == NoWinner then
+                        ( case gameState.whoseTurn of
+                            Zephyrus ->
+                                model.playerid
+
+                            Notus ->
+                                model.otherPlayerid
+                        , ChooseResign gameState.whoseTurn
+                        )
+
+                    else
+                        ( model.playerid, ChooseNew Zephyrus )
+            in
+            model
+                |> withCmd
+                    (send model <|
+                        PlayReq
+                            { playerid = playerid
+                            , placement = placement
+                            }
+                    )
+
+        ClearStorage ->
+            let
+                ( mdl, cmd ) =
+                    init JE.null "url" model.key
+            in
+            { mdl | started = True }
+                |> withCmds [ clear, cmd ]
 
         Click ( row, col ) ->
             if gameState.winner /= NoWinner then
@@ -749,199 +810,117 @@ doClick row col model =
         gameState =
             model.gameState
 
-        makeMove r c =
-            let
-                filled =
-                    Board.get r c gameState.board
-
-                ( firstSelection, decoration, ( moves, board, player ) ) =
-                    if filled then
-                        ( model.firstSelection
-                        , AlreadyFilledDecoration ( r, c )
-                        , ( gameState.moves, gameState.board, gameState.whoseTurn )
-                        )
+        withPlayReq playerid placement =
+            withCmd <|
+                send model
+                    (PlayReq
+                        { playerid = playerid
+                        , placement = placement
+                        }
+                    )
+    in
+    case model.firstSelection of
+        ColSelectedDecoration selectedCol ->
+            case model.decoration of
+                RowSelectedDecoration selectedRow ->
+                    if row /= selectedRow then
+                        { model
+                            | decoration =
+                                RowSelectedDecoration row
+                        }
+                            |> withNoCmd
 
                     else
-                        ( NoDecoration
-                        , NoDecoration
-                        , ( List.concat [ gameState.moves, [ cellName ( r, c ) ] ]
-                          , Board.set r c gameState.board
-                          , Types.otherPlayer gameState.whoseTurn
-                          )
-                        )
-            in
-            { model
-                | firstSelection = firstSelection
-                , decoration = decoration
-                , player = player
-                , gameState =
-                    { gameState
-                        | moves = moves
-                        , board = board
-                    }
-            }
+                        model
+                            |> (withPlayReq model.otherPlayerid <| ChooseRow row)
 
-        mdl =
-            case model.firstSelection of
-                ColSelectedDecoration selectedCol ->
-                    case model.decoration of
-                        RowSelectedDecoration selectedRow ->
-                            if row /= selectedRow then
-                                { model
-                                    | decoration =
-                                        RowSelectedDecoration row
-                                }
+                AlreadyFilledDecoration ( ar, ac ) ->
+                    model
+                        |> (case gameState.whoseTurn of
+                                Zephyrus ->
+                                    withPlayReq model.playerid <| ChooseCol col
 
-                            else
-                                makeMove selectedRow selectedCol
-
-                        AlreadyFilledDecoration ( ar, ac ) ->
-                            let
-                                ( r, c ) =
-                                    case model.player of
-                                        Zephyrus ->
-                                            ( ar, col )
-
-                                        Notus ->
-                                            ( row, ac )
-                            in
-                            if Board.get r c gameState.board then
-                                { model
-                                    | decoration =
-                                        AlreadyFilledDecoration ( r, c )
-                                }
-
-                            else
-                                makeMove r c
-
-                        _ ->
-                            { model
-                                | decoration =
-                                    RowSelectedDecoration row
-                            }
-
-                RowSelectedDecoration selectedRow ->
-                    case model.decoration of
-                        ColSelectedDecoration selectedCol ->
-                            if col /= selectedCol then
-                                { model
-                                    | decoration =
-                                        ColSelectedDecoration col
-                                }
-
-                            else
-                                makeMove selectedRow selectedCol
-
-                        AlreadyFilledDecoration ( ar, ac ) ->
-                            let
-                                ( r, c ) =
-                                    case model.player of
-                                        Zephyrus ->
-                                            ( ar, col )
-
-                                        Notus ->
-                                            ( row, ac )
-                            in
-                            if Board.get r c gameState.board then
-                                { model
-                                    | decoration =
-                                        AlreadyFilledDecoration ( r, c )
-                                }
-
-                            else
-                                makeMove r c
-
-                        _ ->
-                            { model
-                                | decoration =
-                                    ColSelectedDecoration col
-                            }
+                                Notus ->
+                                    withPlayReq model.otherPlayerid <| ChooseRow row
+                           )
 
                 _ ->
-                    case model.decoration of
-                        NoDecoration ->
-                            { model
-                                | decoration =
-                                    if model.chooseFirst == Zephyrus then
-                                        ColSelectedDecoration col
+                    { model
+                        | decoration =
+                            RowSelectedDecoration row
+                    }
+                        |> withNoCmd
 
-                                    else
-                                        RowSelectedDecoration row
-                            }
+        RowSelectedDecoration selectedRow ->
+            case model.decoration of
+                ColSelectedDecoration selectedCol ->
+                    if col /= selectedCol then
+                        { model
+                            | decoration =
+                                ColSelectedDecoration col
+                        }
+                            |> withNoCmd
 
-                        ColSelectedDecoration c ->
-                            if c == col then
-                                { model
-                                    | decoration =
-                                        NoDecoration
-                                    , firstSelection =
-                                        model.decoration
-                                }
+                    else
+                        model
+                            |> (withPlayReq model.playerid <| ChooseCol col)
+
+                AlreadyFilledDecoration ( ar, ac ) ->
+                    model
+                        |> (case gameState.whoseTurn of
+                                Zephyrus ->
+                                    withPlayReq model.playerid <| ChooseCol col
+
+                                Notus ->
+                                    withPlayReq model.otherPlayerid <| ChooseRow row
+                           )
+
+                _ ->
+                    { model
+                        | decoration =
+                            ColSelectedDecoration col
+                    }
+                        |> withNoCmd
+
+        _ ->
+            case model.decoration of
+                NoDecoration ->
+                    { model
+                        | decoration =
+                            if model.chooseFirst == Zephyrus then
+                                ColSelectedDecoration col
 
                             else
-                                { model
-                                    | decoration =
-                                        ColSelectedDecoration col
-                                }
+                                RowSelectedDecoration row
+                    }
+                        |> withNoCmd
 
-                        RowSelectedDecoration r ->
-                            if r == row then
-                                { model
-                                    | decoration =
-                                        NoDecoration
-                                    , firstSelection =
-                                        model.decoration
-                                }
+                ColSelectedDecoration c ->
+                    if c == col then
+                        model
+                            |> (withPlayReq model.playerid <| ChooseCol col)
 
-                            else
-                                { model
-                                    | decoration =
-                                        RowSelectedDecoration row
-                                }
+                    else
+                        { model
+                            | decoration =
+                                ColSelectedDecoration col
+                        }
+                            |> withNoCmd
 
-                        _ ->
-                            model
+                RowSelectedDecoration r ->
+                    if r == row then
+                        model
+                            |> (withPlayReq model.otherPlayerid <| ChooseRow row)
 
-        gs =
-            mdl.gameState
+                    else
+                        { model
+                            | decoration =
+                                RowSelectedDecoration row
+                        }
+                            |> withNoCmd
 
-        newBoard =
-            gs.board
-
-        ( winner, path ) =
-            Board.winner model.player newBoard
-
-        score =
-            mdl.gameState.score
-    in
-    { mdl
-        | gameState =
-            { gs
-                | winner = winner
-                , path = path
-                , score =
-                    case winner of
-                        ZephyrusWinner ->
-                            { score
-                                | zephyrusGames =
-                                    score.zephyrusGames + 1
-                                , zephyrusScore =
-                                    score.zephyrusScore + Board.score newBoard
-                            }
-
-                        NotusWinner ->
-                            { score
-                                | notusGames =
-                                    score.notusGames + 1
-                                , notusScore =
-                                    score.notusScore + Board.score newBoard
-                            }
-
-                        _ ->
-                            score
-            }
-    }
-        |> withNoCmd
+                _ ->
+                    model |> withNoCmd
 
 
 cellName : ( Int, Int ) -> String
@@ -1050,7 +1029,7 @@ mainPage bsize model =
                                     "Notus chose. Zephyrus pick a column"
 
                                 AlreadyFilledDecoration _ ->
-                                    case model.player of
+                                    case gameState.whoseTurn of
                                         Zephyrus ->
                                             "Zephyrus pick another column"
 
@@ -1066,7 +1045,7 @@ mainPage bsize model =
                                     "Zephyrus chose. Notus pick a row"
 
                                 AlreadyFilledDecoration _ ->
-                                    case model.player of
+                                    case gameState.whoseTurn of
                                         Zephyrus ->
                                             "Zephyrus pick another column"
 
@@ -1092,7 +1071,7 @@ mainPage bsize model =
                                     "Notus confirm or pick another row"
 
                                 AlreadyFilledDecoration _ ->
-                                    if model.player == Zephyrus then
+                                    if gameState.whoseTurn == Zephyrus then
                                         "Zephyrus pick another column"
 
                                     else
@@ -1139,7 +1118,7 @@ mainPage bsize model =
                 span []
                     [ b "Stone Placer: "
                     , text <|
-                        case model.player of
+                        case gameState.whoseTurn of
                             Zephyrus ->
                                 "Zephyrus"
 
@@ -1176,7 +1155,13 @@ mainPage bsize model =
             , br
             , button
                 [ onClick NewGame ]
-                [ text "New Game" ]
+                [ text <|
+                    if gameState.winner == NoWinner then
+                        "Resign"
+
+                    else
+                        "New Game"
+                ]
             ]
         , p []
             [ text "Moves: "
@@ -1206,6 +1191,10 @@ mainPage bsize model =
                 , target "_blank"
                 ]
                 [ text "GitHub" ]
+            , br
+            , button
+                [ onClick ClearStorage ]
+                [ text <| "Clear" ]
             ]
         ]
 
@@ -1350,6 +1339,9 @@ In non-networked play, the "Choose first" radio buttons control which
 player chooses a row or column first for each stone placement. This is
 amenable to using a portable device (e.g. a smart phone or tablet),
 and passing it back and forth to make selections.
+
+Click the "Clear" button at the bottom of the page to remove all stored
+state from your browser, and restart with an empty board.
 """
             ]
         , playButton
@@ -1559,6 +1551,11 @@ put key value =
 get : String -> Cmd Msg
 get key =
     localStorageSend (LocalStorage.get key)
+
+
+clear : Cmd Msg
+clear =
+    localStorageSend (LocalStorage.clear "")
 
 
 localStorageSend : LocalStorage.Message -> Cmd Msg

@@ -245,12 +245,15 @@ messageProcessor state message =
                                     let
                                         gs =
                                             emptyGameState gameState.players
+
+                                        gs2 =
+                                            { gs | score = gameState.score }
                                     in
-                                    ( ServerInterface.updateGame gameid gs state
+                                    ( ServerInterface.updateGame gameid gs2 state
                                     , Just <|
                                         AnotherGameRsp
                                             { gameid = gameid
-                                            , gameState = gs
+                                            , gameState = gs2
                                             , player = player
                                             }
                                     )
@@ -309,14 +312,9 @@ messageProcessor state message =
                                                 AlreadyFilledDecoration ( row, col )
 
                                             AlreadyFilledDecoration ( _, col ) ->
-                                                if gameState.whoseTurn == Notus then
-                                                    AlreadyFilledDecoration ( row, col )
-
-                                                else
-                                                    -- Not your turn, may not resolve
-                                                    private.decoration
+                                                AlreadyFilledDecoration ( row, col )
                                 in
-                                doPlay decoration player gameid gameState state
+                                doPlay decoration gameid gameState state
 
                         ChooseCol col ->
                             if player == Notus then
@@ -344,14 +342,9 @@ messageProcessor state message =
                                                 AlreadyFilledDecoration ( row, col )
 
                                             AlreadyFilledDecoration ( row, _ ) ->
-                                                if gameState.whoseTurn == Zephyrus then
-                                                    AlreadyFilledDecoration ( row, col )
-
-                                                else
-                                                    -- Not your turn, may not resolve
-                                                    private.decoration
+                                                AlreadyFilledDecoration ( row, col )
                                 in
-                                doPlay decoration player gameid gameState state
+                                doPlay decoration gameid gameState state
 
         ChatReq { playerid, text } ->
             case lookupGame message playerid state of
@@ -384,9 +377,12 @@ messageProcessor state message =
             errorRes message state "Received a non-request."
 
 
-doPlay : Decoration -> Player -> GameId -> GameState -> ServerState -> ( ServerState, Maybe Message )
-doPlay decoration player gameid gameState state =
+doPlay : Decoration -> GameId -> GameState -> ServerState -> ( ServerState, Maybe Message )
+doPlay decoration gameid gameState state =
     let
+        whoseTurn =
+            gameState.whoseTurn
+
         private =
             gameState.private
 
@@ -396,11 +392,11 @@ doPlay decoration player gameid gameState state =
         moves =
             gameState.moves
 
-        ( ( newDecoration, newBoard, newPlayer ), ( winner, path, newMoves ) ) =
+        ( ( newDecoration, newBoard, newWhoseTurn ), ( newWinner, newPath, newMoves ) ) =
             case decoration of
                 AlreadyFilledDecoration ( row, col ) ->
                     if Board.get row col board then
-                        ( ( decoration, board, player ), ( NoWinner, [], moves ) )
+                        ( ( decoration, board, whoseTurn ), ( NoWinner, [], moves ) )
 
                     else
                         let
@@ -410,31 +406,31 @@ doPlay decoration player gameid gameState state =
                             moves2 =
                                 List.concat [ moves, [ cellName ( row, col ) ] ]
 
-                            ( winner2, path2 ) =
-                                Board.winner player board2
+                            ( winner, path ) =
+                                Board.winner whoseTurn board2
 
-                            player2 =
-                                case winner2 of
+                            whoseTurn2 =
+                                case winner of
                                     NoWinner ->
-                                        Types.otherPlayer player
+                                        Types.otherPlayer whoseTurn
 
                                     _ ->
-                                        player
+                                        whoseTurn
                         in
-                        ( ( NoDecoration, board2, player2 )
-                        , ( winner2, path2, moves2 )
+                        ( ( NoDecoration, board2, whoseTurn2 )
+                        , ( winner, path, moves2 )
                         )
 
                 _ ->
-                    ( ( decoration, board, player ), ( NoWinner, [], moves ) )
+                    ( ( decoration, board, whoseTurn ), ( NoWinner, [], moves ) )
 
         gs =
             { gameState
                 | board = newBoard
                 , moves = newMoves
-                , whoseTurn = newPlayer
-                , winner = winner
-                , path = path
+                , whoseTurn = newWhoseTurn
+                , winner = newWinner
+                , path = newPath
                 , private = { private | decoration = newDecoration }
             }
                 |> updateScore
@@ -442,7 +438,7 @@ doPlay decoration player gameid gameState state =
         state2 =
             ServerInterface.updateGame gameid gs state
     in
-    case winner of
+    case newWinner of
         NoWinner ->
             ( state2
             , Just <|

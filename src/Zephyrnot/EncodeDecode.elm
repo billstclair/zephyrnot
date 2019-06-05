@@ -413,14 +413,28 @@ playerNamesDecoder =
 
 encodePrivateGameState : PrivateGameState -> Value
 encodePrivateGameState { decoration } =
-    JE.object
-        [ ( "decoration", encodeDecoration decoration ) ]
+    case decoration of
+        NoDecoration ->
+            JE.null
+
+        _ ->
+            JE.object [ ( "decoration", encodeDecoration decoration ) ]
 
 
 privateGameStateDecoder : Decoder PrivateGameState
 privateGameStateDecoder =
-    JD.succeed PrivateGameState
-        |> required "decoration" decorationDecoder
+    JD.oneOf
+        [ JD.map PrivateGameState <| JD.field "decoration" decorationDecoder
+        , JD.value
+            |> JD.andThen
+                (\value ->
+                    if value == JE.null then
+                        JD.succeed Types.emptyPrivateGameState
+
+                    else
+                        JD.fail "Bad PrivateGameState"
+                )
+        ]
 
 
 encodeGameState : Bool -> GameState -> Value
@@ -428,6 +442,13 @@ encodeGameState includePrivate gameState =
     let
         { board, moves, players, whoseTurn, score, winner, path } =
             gameState
+
+        privateValue =
+            if includePrivate then
+                encodePrivateGameState gameState.private
+
+            else
+                JE.null
     in
     JE.object
         [ ( "board", encodeBoard board )
@@ -437,15 +458,7 @@ encodeGameState includePrivate gameState =
         , ( "score", encodeScore score )
         , ( "winner", encodeWinner winner )
         , ( "path", JE.list encodeIntPair path )
-        , ( "private"
-          , (if includePrivate then
-                gameState.private
-
-             else
-                Types.emptyPrivateGameState
-            )
-                |> encodePrivateGameState
-          )
+        , ( "private", privateValue )
         ]
 
 
