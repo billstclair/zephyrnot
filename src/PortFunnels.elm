@@ -42,12 +42,14 @@ import PortFunnel
         , StateAccessors
         )
 import PortFunnel.LocalStorage as LocalStorage
+import PortFunnel.WebSocket as WebSocket
 
 
 {-| Add a property to this type for each funnel module you use.
 -}
 type alias State =
     { storage : LocalStorage.State
+    , websocket : WebSocket.State
     }
 
 
@@ -59,6 +61,7 @@ The `String` parameter is the prefix for the localStorage.
 initialState : String -> State
 initialState prefix =
     { storage = LocalStorage.initialState prefix
+    , websocket = WebSocket.initialState
     }
 
 
@@ -69,6 +72,11 @@ localStorageAccessors =
     StateAccessors .storage (\substate state -> { state | storage = substate })
 
 
+websocketAccessors : StateAccessors State WebSocket.State
+websocketAccessors =
+    StateAccessors .websocket (\substate state -> { state | websocket = substate })
+
+
 {-| A `Funnel` tags a module-specific `FunnelSpec`.
 
 Add a tag here for each funnel module you use.
@@ -76,6 +84,7 @@ Add a tag here for each funnel module you use.
 -}
 type Funnel model msg
     = LocalStorageFunnel (FunnelSpec State LocalStorage.State LocalStorage.Message LocalStorage.Response model msg)
+    | WebSocketFunnel (FunnelSpec State WebSocket.State WebSocket.Message WebSocket.Response model msg)
 
 
 {-| A `Handler` tags a function to handle responses from one funnel module.
@@ -85,6 +94,7 @@ Add a tag in this type for each funnel module you use.
 -}
 type Handler model msg
     = LocalStorageHandler (LocalStorage.Response -> State -> model -> ( model, Cmd msg ))
+    | WebSocketHandler (WebSocket.Response -> State -> model -> ( model, Cmd msg ))
 
 
 {-| This packages up everything necessary to dispatch for each module.
@@ -101,6 +111,12 @@ handlerToFunnel handler =
                 |> LocalStorageFunnel
             )
 
+        WebSocketHandler websocketHandler ->
+            ( WebSocket.moduleName
+            , FunnelSpec websocketAccessors WebSocket.moduleDesc WebSocket.commander websocketHandler
+                |> WebSocketFunnel
+            )
+
 
 {-| Add a tuple to this list for each funnel module you use.
 -}
@@ -108,6 +124,7 @@ simulatedPortDict : Dict String ((Value -> msg) -> Value -> Cmd msg)
 simulatedPortDict =
     Dict.fromList
         [ ( LocalStorage.moduleName, LocalStorage.makeSimulatedCmdPort )
+        , ( WebSocket.moduleName, WebSocket.makeSimulatedCmdPort )
         ]
 
 
@@ -123,6 +140,13 @@ appTrampoline portGetter genericMessage funnel state model =
     case funnel of
         LocalStorageFunnel appFunnel ->
             PortFunnel.appProcess (portGetter LocalStorage.moduleName model)
+                genericMessage
+                appFunnel
+                state
+                model
+
+        WebSocketFunnel appFunnel ->
+            PortFunnel.appProcess (portGetter WebSocket.moduleName model)
                 genericMessage
                 appFunnel
                 state
