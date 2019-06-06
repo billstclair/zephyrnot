@@ -1,0 +1,4 @@
+#!/bin/bash
+
+elm make src/Zephyrnot/Server/Server.elm --output server/server.js
+elm make src/Zephyrnot/Server/Client.elm --output server/client.js
