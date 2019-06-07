@@ -195,7 +195,7 @@ messageProcessor state message =
                         , Just <|
                             JoinRsp
                                 { gameid = gameid
-                                , playerid = playerid
+                                , playerid = Just playerid
                                 , player = player
                                 , gameState = gameState2
                                 }

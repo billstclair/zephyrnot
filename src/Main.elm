@@ -435,7 +435,13 @@ incomingMessage interface message mdl =
 
         JoinRsp { gameid, playerid, player, gameState } ->
             { model
-                | otherPlayerid = playerid
+                | otherPlayerid =
+                    case playerid of
+                        Just p ->
+                            p
+
+                        Nothing ->
+                            ""
                 , gameState = gameState
             }
                 |> withNoCmd

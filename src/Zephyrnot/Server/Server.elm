@@ -97,8 +97,11 @@ messageSender model socket state request response =
 
                 _ ->
                     case response of
+                        JoinRsp _ ->
+                            sendJoinRsp model
+
                         PlayRsp _ ->
-                            sendPlayRsp request model
+                            sendPlayRsp model
 
                         _ ->
                             sendToAll model
@@ -124,8 +127,37 @@ sendToAll model response socket =
                 response
 
 
-sendPlayRsp : Message -> Model -> Message -> Socket -> Cmd Msg
-sendPlayRsp request model response socket =
+sendToOthers : Model -> Message -> Socket -> Cmd Msg
+sendToOthers model response socket =
+    case Types.messageToGameid response of
+        Nothing ->
+            Cmd.none
+
+        Just gameid ->
+            WebSocketFramework.Server.sendToOthers gameid
+                socket
+                model
+                ED.messageEncoder
+                response
+
+
+sendJoinRsp : Model -> Message -> Socket -> Cmd Msg
+sendJoinRsp model response socket =
+    case response of
+        JoinRsp record ->
+            Cmd.batch
+                [ sendToOne response socket
+                , sendToOthers model
+                    (JoinRsp { record | playerid = Nothing })
+                    socket
+                ]
+
+        _ ->
+            sendToAll model response socket
+
+
+sendPlayRsp : Model -> Message -> Socket -> Cmd Msg
+sendPlayRsp model response socket =
     case response of
         PlayRsp { decoration } ->
             let

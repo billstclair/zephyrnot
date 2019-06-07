@@ -26,6 +26,7 @@ module Zephyrnot.Types exposing
     , Winner(..)
     , emptyPrivateGameState
     , messageToGameid
+    , messageToPlayer
     , messageToPlayerid
     , otherPlayer
     , zeroScore
@@ -161,7 +162,7 @@ type Message
         }
     | JoinRsp
         { gameid : GameId
-        , playerid : PlayerId
+        , playerid : Maybe PlayerId
         , player : Player
         , gameState : GameState
         }
@@ -213,6 +214,25 @@ type Message
         }
 
 
+messageToPlayer : Message -> Maybe Player
+messageToPlayer message =
+    case message of
+        NewReq { player } ->
+            Just player
+
+        NewRsp { player } ->
+            Just player
+
+        ResignRsp { player } ->
+            Just player
+
+        AnotherGameRsp { player } ->
+            Just player
+
+        _ ->
+            Nothing
+
+
 messageToPlayerid : Message -> Maybe PlayerId
 messageToPlayerid message =
     case message of
@@ -220,7 +240,7 @@ messageToPlayerid message =
             Just playerid
 
         JoinRsp { playerid } ->
-            Just playerid
+            playerid
 
         LeaveReq { playerid } ->
             Just playerid
