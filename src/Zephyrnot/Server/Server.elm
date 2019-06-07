@@ -197,6 +197,15 @@ userFunctions =
     }
 
 
+{-| Debugging version
+-}
+messageProcessor : ServerState -> Message -> ( ServerState, Maybe Message )
+messageProcessor state message =
+    Interface.messageProcessor (Debug.log "messageProcessor" state)
+        (Debug.log "  message" message)
+        |> Debug.log "  output"
+
+
 main =
     program serverModel userFunctions Nothing
 

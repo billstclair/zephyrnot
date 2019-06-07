@@ -360,8 +360,7 @@ view : Model -> Html Msg
 view model =
     H.div
         []
-        [ H.ul [] (List.map messageView <| List.reverse model.messages)
-        , H.input
+        [ H.input
             [ A.id "input"
             , A.type_ "text"
             , A.placeholder "Message..."
@@ -389,4 +388,5 @@ view model =
                         )
                 )
             ]
+        , H.ul [] (List.map messageView model.messages)
         ]
