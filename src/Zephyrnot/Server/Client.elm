@@ -225,6 +225,13 @@ socketHandler response state mdl =
                                 AnotherGameRsp { gameState } ->
                                     { mdl2 | gameState = gameState }
 
+                                LeaveRsp _ ->
+                                    { mdl2
+                                        | gameid = ""
+                                        , zephyrus = ""
+                                        , notus = ""
+                                    }
+
                                 _ ->
                                     mdl2
             in
@@ -348,6 +355,8 @@ validMessages model =
             }
         , UpdateReq { playerid = zephyrus }
         , UpdateReq { playerid = notus }
+        , LeaveReq { playerid = zephyrus }
+        , LeaveReq { playerid = notus }
         , chatReq zephyrus
         , chatReq notus
         ]
