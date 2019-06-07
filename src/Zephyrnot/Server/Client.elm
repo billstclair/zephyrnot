@@ -222,6 +222,9 @@ socketHandler response state mdl =
                                 GameOverRsp { gameState } ->
                                     { mdl2 | gameState = gameState }
 
+                                AnotherGameRsp { gameState } ->
+                                    { mdl2 | gameState = gameState }
+
                                 _ ->
                                     mdl2
             in
@@ -382,6 +385,7 @@ view model =
                                 , H.a
                                     [ A.href "#"
                                     , E.onClick <| ClickMessage s
+                                    , A.class "message"
                                     ]
                                     [ H.text s ]
                                 ]
