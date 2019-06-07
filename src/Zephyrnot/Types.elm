@@ -26,6 +26,7 @@ module Zephyrnot.Types exposing
     , Winner(..)
     , emptyPrivateGameState
     , messageToGameid
+    , messageToPlayerid
     , otherPlayer
     , zeroScore
     )
@@ -210,6 +211,31 @@ type Message
         , name : String
         , text : String
         }
+
+
+messageToPlayerid : Message -> Maybe PlayerId
+messageToPlayerid message =
+    case message of
+        NewRsp { playerid } ->
+            Just playerid
+
+        JoinRsp { playerid } ->
+            Just playerid
+
+        LeaveReq { playerid } ->
+            Just playerid
+
+        UpdateReq { playerid } ->
+            Just playerid
+
+        PlayReq { playerid } ->
+            Just playerid
+
+        ChatReq { playerid } ->
+            Just playerid
+
+        _ ->
+            Nothing
 
 
 messageToGameid : Message -> Maybe GameId
