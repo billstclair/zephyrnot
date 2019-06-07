@@ -22,6 +22,14 @@ Normally, the server is silent except for notifying you of the port it's listeni
 
 * `VERBOSE=yes npm run start`
 
+If you want to poke around in the node environment, you can set the REPL environment variable:
+
+* `REPL=yes npm run start`
+
+`exit()` will exit back to the command line from the REPL. If you don't start a repl, then type Ctrl-C to exit.
+
+If you do not want to automatically start the web server, set the NOLISTEN environment variable. You can then start listening by typing `listen()` in the REPL, or `listen(port)`, if you want to listen on something other than the defaulted PORT.
+
 If your web server automatically upgrades to HTTPS, or you prefer to leave off the ":8081" from the Server URL, you'll need to proxy to get to the non-encrypted websocket server. Do this by installing Apache `mod_proxy_wstunnel`:
 
     $ sudo a2enmod proxy_wstunnel

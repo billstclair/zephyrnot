@@ -25,6 +25,7 @@ module Zephyrnot.Types exposing
     , ServerState
     , Winner(..)
     , emptyPrivateGameState
+    , messageToGameid
     , otherPlayer
     , zeroScore
     )
@@ -209,6 +210,37 @@ type Message
         , name : String
         , text : String
         }
+
+
+messageToGameid : Message -> Maybe GameId
+messageToGameid message =
+    case message of
+        NewRsp { gameid } ->
+            Just gameid
+
+        JoinReq { gameid } ->
+            Just gameid
+
+        LeaveRsp { gameid } ->
+            Just gameid
+
+        UpdateRsp { gameid } ->
+            Just gameid
+
+        PlayRsp { gameid } ->
+            Just gameid
+
+        ResignRsp { gameid } ->
+            Just gameid
+
+        GameOverRsp { gameid } ->
+            Just gameid
+
+        ChatRsp { gameid } ->
+            Just gameid
+
+        _ ->
+            Nothing
 
 
 type alias ServerState =

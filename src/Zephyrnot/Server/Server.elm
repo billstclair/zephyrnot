@@ -2,10 +2,11 @@ port module Zephyrnot.Server.Server exposing (main)
 
 import WebSocketFramework.Server
     exposing
-        ( ServerMessageSender
+        ( Msg
+        , ServerMessageSender
+        , Socket
         , UserFunctions
         , program
-        , sendToOne
         , verbose
         )
 import WebSocketFramework.Types
@@ -13,18 +14,27 @@ import WebSocketFramework.Types
         ( EncodeDecode
         , Error
         , ErrorKind(..)
+        , GameId
         , InputPort
         , OutputPort
-        , ServerState
         )
 import Zephyrnot.EncodeDecode as ED
 import Zephyrnot.Interface as Interface
 import Zephyrnot.Types as Types
     exposing
-        ( GameState
+        ( Decoration(..)
+        , GameState
         , Message(..)
         , Player
         )
+
+
+type alias Model =
+    WebSocketFramework.Server.Model ServerModel Message GameState Player
+
+
+type alias ServerState =
+    WebSocketFramework.Types.ServerState GameState Player
 
 
 type alias ServerModel =
@@ -76,7 +86,68 @@ encodeDecode =
 
 messageSender : ServerMessageSender ServerModel Message GameState Player
 messageSender model socket state request response =
-    ( model, sendToOne ED.messageEncoder response outputPort socket )
+    let
+        sender =
+            case request of
+                NewReq _ ->
+                    sendToOne
+
+                UpdateReq _ ->
+                    sendToOne
+
+                _ ->
+                    case response of
+                        PlayRsp _ ->
+                            sendPlayRsp request model
+
+                        _ ->
+                            sendToAll model
+    in
+    ( model, sender response socket )
+
+
+sendToOne : Message -> Socket -> Cmd Msg
+sendToOne response socket =
+    WebSocketFramework.Server.sendToOne ED.messageEncoder response outputPort socket
+
+
+sendToAll : Model -> Message -> Socket -> Cmd Msg
+sendToAll model response socket =
+    case Types.messageToGameid response of
+        Nothing ->
+            sendToOne response socket
+
+        Just gameid ->
+            WebSocketFramework.Server.sendToAll gameid
+                model
+                ED.messageEncoder
+                response
+
+
+sendPlayRsp : Message -> Model -> Message -> Socket -> Cmd Msg
+sendPlayRsp request model response socket =
+    case response of
+        PlayRsp { decoration } ->
+            let
+                toOne =
+                    case decoration of
+                        RowSelectedDecoration _ ->
+                            True
+
+                        ColSelectedDecoration _ ->
+                            True
+
+                        _ ->
+                            False
+            in
+            if toOne then
+                sendToOne response socket
+
+            else
+                sendToAll model response socket
+
+        _ ->
+            sendToAll model response socket
 
 
 userFunctions : UserFunctions ServerModel Message GameState Player
@@ -84,7 +155,7 @@ userFunctions =
     { encodeDecode = encodeDecode
     , messageProcessor = Interface.messageProcessor
     , messageSender = messageSender
-    , messageToGameid = Nothing
+    , messageToGameid = Just Types.messageToGameid
     , messageToPlayerid = Nothing
     , autoDeleteGame = Nothing
     , gamesDeleter = Nothing
