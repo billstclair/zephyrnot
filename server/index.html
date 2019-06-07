@@ -12,9 +12,14 @@
   <div id="mount"></div>
   <script src="client.js"></script>
   <script>
+    var url = window.location.href
+    if (url.endsWith('#')) {
+      url = url.slice(0, -1);
+    }
+      
     app = Elm.Client.init(
       { node: document.getElementById('mount'),
-        flags: window.location.href.replace('http', 'ws')
+        flags: url.replace('http', 'ws')
       }
     );
     PortFunnel.subscribe(app)

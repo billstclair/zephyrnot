@@ -13,6 +13,7 @@
 module Client exposing (Model, Msg(..), br, init, is13, main, messageView, onEnter, subscriptions, update, view)
 
 import Browser
+import Browser.Dom as Dom
 import Html as H exposing (Html)
 import Html.Attributes as A
 import Html.Events as E
@@ -21,9 +22,20 @@ import Json.Encode as Encode exposing (Value)
 import PortFunnel.WebSocket as WebSocket exposing (Response(..))
 import PortFunnels exposing (FunnelDict, Handler(..), State)
 import Task
+import Url
 import WebSocketFramework.EncodeDecode as WSFED
+import WebSocketFramework.Types exposing (GameId, PlayerId)
 import Zephyrnot.EncodeDecode as ED
-import Zephyrnot.Types as Types exposing (Choice(..), Message(..), Player(..))
+import Zephyrnot.Interface as Interface
+import Zephyrnot.Types as Types
+    exposing
+        ( Choice(..)
+        , GameState
+        , Message(..)
+        , Player(..)
+        , PlayerNames
+        , Winner(..)
+        )
 
 
 main : Program String Model Msg
@@ -42,6 +54,10 @@ main =
 
 type alias Model =
     { messages : List String
+    , gameState : GameState
+    , gameid : String
+    , zephyrus : String
+    , notus : String
     , input : String
     , server : String
     , error : Maybe String
@@ -52,6 +68,10 @@ type alias Model =
 init : String -> ( Model, Cmd Msg )
 init server =
     ( { messages = []
+      , gameState = Interface.emptyGameState (PlayerNames "" "")
+      , gameid = ""
+      , zephyrus = ""
+      , notus = ""
       , input = ""
       , server = server
       , error = Nothing
@@ -63,7 +83,8 @@ init server =
 
 openSocket : String -> Cmd Msg
 openSocket server =
-    WebSocket.makeOpen (Debug.log "openSocket" server)
+    WebSocket.makeOpen
+        (Debug.log "openSocket" server)
         |> WebSocket.send cmdPort
 
 
@@ -72,8 +93,10 @@ openSocket server =
 
 
 type Msg
-    = InputMessage String
+    = Noop
+    | InputMessage String
     | SubmitMessage
+    | ClickMessage String
     | ServerMessage String
     | Process Value
 
@@ -81,6 +104,9 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        Noop ->
+            ( model, Cmd.none )
+
         InputMessage value ->
             ( { model | input = value }
             , Cmd.none
@@ -93,6 +119,11 @@ update msg model =
               }
             , WebSocket.makeSend model.server model.input
                 |> WebSocket.send cmdPort
+            )
+
+        ClickMessage value ->
+            ( { model | input = value }
+            , Task.attempt (\_ -> Noop) <| Dom.focus "input"
             )
 
         ServerMessage message ->
@@ -151,8 +182,50 @@ socketHandler response state mdl =
             { mdl | state = state }
     in
     case response of
-        WebSocket.MessageReceivedResponse { message } ->
-            ( model, Task.perform ServerMessage <| Task.succeed message )
+        WebSocket.MessageReceivedResponse received ->
+            let
+                string =
+                    received.message
+
+                mdl2 =
+                    { model | messages = string :: model.messages }
+
+                model2 =
+                    case WSFED.decodeMessage ED.messageDecoder string of
+                        Err errmsg ->
+                            { mdl2 | error = Just errmsg }
+
+                        Ok message ->
+                            case message of
+                                NewRsp { gameid, playerid } ->
+                                    { mdl2
+                                        | gameid = gameid
+                                        , zephyrus = playerid
+                                        , notus = ""
+                                    }
+
+                                JoinRsp { playerid, gameState } ->
+                                    { mdl2
+                                        | notus =
+                                            case playerid of
+                                                Just p ->
+                                                    p
+
+                                                Nothing ->
+                                                    ""
+                                        , gameState = gameState
+                                    }
+
+                                ResignRsp { gameState } ->
+                                    { mdl2 | gameState = gameState }
+
+                                GameOverRsp { gameState } ->
+                                    { mdl2 | gameState = gameState }
+
+                                _ ->
+                                    mdl2
+            in
+            ( model2, Cmd.none )
 
         ErrorResponse error ->
             ( { model | error = Just <| WebSocket.errorToString error }
@@ -208,46 +281,78 @@ br =
     H.br [] []
 
 
-exampleMessages : List Message
-exampleMessages =
-    [ NewReq
+newReq : Message
+newReq =
+    NewReq
         { name = "Bill"
         , player = Zephyrus
         , isPublic = False
         , restoreState = Nothing
         }
-    , JoinReq
-        { gameid = "GAMEID"
-        , name = "Chris"
-        }
-    , PlayReq
-        { playerid = "PLAYERID"
-        , placement = ChooseRow 0
-        }
-    , PlayReq
-        { playerid = "PLAYERID"
-        , placement = ChooseCol 0
-        }
-    , PlayReq
-        { playerid = "PLAYERID"
-        , placement = ChooseResign Zephyrus
-        }
-    , PlayReq
-        { playerid = "PLAYERID"
-        , placement = ChooseNew Zephyrus
-        }
-    , LeaveReq { playerid = "PLAYERID" }
-    , UpdateReq { playerid = "PLAYERID" }
-    , ChatReq
-        { playerid = "PLAYERID"
-        , text = "Hello, World!"
-        }
-    ]
 
 
-exampleMessageStrings : List String
-exampleMessageStrings =
-    exampleMessages
+chatReq : PlayerId -> Message
+chatReq playerid =
+    ChatReq
+        { playerid = playerid
+        , text = "Hello"
+        }
+
+
+validMessages : Model -> List Message
+validMessages model =
+    let
+        { gameState, gameid, zephyrus, notus } =
+            model
+    in
+    if gameid == "" then
+        [ newReq ]
+
+    else if notus == "" then
+        [ JoinReq
+            { gameid = gameid
+            , name = "Chris"
+            }
+        , newReq
+        ]
+
+    else if gameState.winner /= NoWinner then
+        [ PlayReq
+            { playerid = model.zephyrus
+            , placement = ChooseNew Zephyrus
+            }
+        , newReq
+        , chatReq zephyrus
+        , chatReq notus
+        ]
+
+    else
+        [ PlayReq
+            { playerid = zephyrus
+            , placement = ChooseCol 0
+            }
+        , PlayReq
+            { playerid = notus
+            , placement = ChooseRow 0
+            }
+        , PlayReq
+            { playerid = zephyrus
+            , placement = ChooseResign Zephyrus
+            }
+        , PlayReq
+            { playerid = notus
+            , placement = ChooseResign Notus
+            }
+        , UpdateReq { playerid = zephyrus }
+        , UpdateReq { playerid = notus }
+        , chatReq zephyrus
+        , chatReq notus
+        ]
+
+
+messageStrings : List Message -> List String
+messageStrings messages =
+    messages
         |> List.map (WSFED.encodeMessage ED.messageEncoder)
 
 
@@ -255,20 +360,33 @@ view : Model -> Html Msg
 view model =
     H.div
         []
-        [ H.ul [] (List.map messageView model.messages)
+        [ H.ul [] (List.map messageView <| List.reverse model.messages)
         , H.input
-            [ A.type_ "text"
+            [ A.id "input"
+            , A.type_ "text"
             , A.placeholder "Message..."
             , A.value model.input
-            , A.size 50
+            , A.size 100
             , E.onInput InputMessage
             , onEnter SubmitMessage
             ]
             []
         , H.p []
             [ H.text "Examples:"
-            , H.span [] <|
-                List.map (\s -> H.span [] [ br, H.text s ])
-                    exampleMessageStrings
+            , H.span []
+                (validMessages model
+                    |> messageStrings
+                    |> List.map
+                        (\s ->
+                            H.span []
+                                [ br
+                                , H.a
+                                    [ A.href "#"
+                                    , E.onClick <| ClickMessage s
+                                    ]
+                                    [ H.text s ]
+                                ]
+                        )
+                )
             ]
         ]
