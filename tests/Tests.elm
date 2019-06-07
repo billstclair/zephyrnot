@@ -128,7 +128,13 @@ protocolData =
         }
     , JoinRsp
         { gameid = "123"
-        , playerid = "77"
+        , playerid = Just "77"
+        , player = Notus
+        , gameState = gameState2
+        }
+    , JoinRsp
+        { gameid = "123"
+        , playerid = Nothing
         , player = Notus
         , gameState = gameState2
         }
