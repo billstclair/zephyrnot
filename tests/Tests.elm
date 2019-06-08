@@ -126,6 +126,10 @@ protocolData =
         { gameid = "123"
         , name = "Irving"
         }
+    , ReJoinReq
+        { gameid = "123"
+        , playerid = "76"
+        }
     , JoinRsp
         { gameid = "123"
         , playerid = Just "77"

@@ -23,8 +23,10 @@ module Zephyrnot.Types exposing
     , SavedModel
     , Score
     , ServerState
+    , Settings
     , Winner(..)
     , emptyPrivateGameState
+    , emptySettings
     , messageToGameid
     , messageToPlayer
     , messageToPlayerid
@@ -92,6 +94,21 @@ zeroScore =
     Score 0 0 0 0
 
 
+type alias Settings =
+    { name : String
+    , serverUrl : String
+    , hideTitle : Bool
+    }
+
+
+emptySettings : Settings
+emptySettings =
+    { name = ""
+    , serverUrl = "ws://localhost:8081"
+    , hideTitle = False
+    }
+
+
 type alias SavedModel =
     { page : Page
     , decoration : Decoration
@@ -99,6 +116,11 @@ type alias SavedModel =
     , chooseFirst : Player
     , player : Player
     , gameState : GameState
+    , isLocal : Bool
+    , isLive : Bool
+    , gameid : String
+    , playerid : String
+    , settings : Settings
     }
 
 
@@ -159,6 +181,10 @@ type Message
     | JoinReq
         { gameid : GameId
         , name : String
+        }
+    | ReJoinReq
+        { gameid : GameId
+        , playerid : PlayerId
         }
     | JoinRsp
         { gameid : GameId

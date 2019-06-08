@@ -50,6 +50,7 @@ import Zephyrnot.Types as Types
         , PrivateGameState
         , SavedModel
         , Score
+        , Settings
         , Winner(..)
         )
 
@@ -81,6 +82,11 @@ encodeSavedModel model =
         , ( "chooseFirst", encodePlayer model.chooseFirst )
         , ( "player", encodePlayer model.player )
         , ( "gameState", encodeGameState True model.gameState )
+        , ( "isLocal", JE.bool model.isLocal )
+        , ( "isLive", JE.bool model.isLive )
+        , ( "gameid", JE.string model.gameid )
+        , ( "playerid", JE.string model.playerid )
+        , ( "settings", encodeSettings model.settings )
         ]
 
 
@@ -98,6 +104,11 @@ savedModelDecoder =
         |> required "chooseFirst" playerDecoder
         |> required "player" playerDecoder
         |> required "gameState" gameStateDecoder
+        |> optional "isLocal" JD.bool False
+        |> optional "isLive" JD.bool False
+        |> optional "gameid" JD.string ""
+        |> optional "playerid" JD.string ""
+        |> optional "settings" settingsDecoder Types.emptySettings
 
 
 encodePage : Page -> Value
@@ -390,6 +401,23 @@ scoreDecoder =
         |> required "notusScore" JD.int
 
 
+encodeSettings : Settings -> Value
+encodeSettings { name, serverUrl, hideTitle } =
+    JE.object
+        [ ( "name", JE.string name )
+        , ( "serverUrl", JE.string serverUrl )
+        , ( "hideTitle", JE.bool hideTitle )
+        ]
+
+
+settingsDecoder : Decoder Settings
+settingsDecoder =
+    JD.succeed Settings
+        |> required "name" JD.string
+        |> required "serverUrl" JD.string
+        |> required "hideTitle" JD.bool
+
+
 
 ---
 --- Messages
@@ -552,6 +580,13 @@ messageEncoderInternal includePrivate message =
               ]
             )
 
+        ReJoinReq { gameid, playerid } ->
+            ( Req "rejoin"
+            , [ ( "gameid", JE.string gameid )
+              , ( "playerid", JE.string playerid )
+              ]
+            )
+
         JoinRsp { gameid, playerid, player, gameState } ->
             ( Rsp "join"
             , [ ( "gameid", JE.string gameid )
@@ -679,6 +714,19 @@ joinReqDecoder =
         )
         |> required "gameid" JD.string
         |> required "name" JD.string
+
+
+rejoinReqDecoder : Decoder Message
+rejoinReqDecoder =
+    JD.succeed
+        (\gameid playerid ->
+            ReJoinReq
+                { gameid = gameid
+                , playerid = playerid
+                }
+        )
+        |> required "gameid" JD.string
+        |> required "playerid" JD.string
 
 
 leaveReqDecoder : Decoder Message
@@ -883,6 +931,9 @@ messageDecoder ( reqrsp, plist ) =
 
                 "join" ->
                     decodePlist joinReqDecoder plist
+
+                "rejoin" ->
+                    decodePlist rejoinReqDecoder plist
 
                 "leave" ->
                     decodePlist leaveReqDecoder plist

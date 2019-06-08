@@ -135,6 +135,7 @@ import Zephyrnot.Types as Types
         , PlayerNames
         , SavedModel
         , Score
+        , Settings
         , Winner(..)
         , zeroScore
         )
@@ -162,9 +163,6 @@ type alias ServerInterface =
 
 type alias Model =
     { interface : ServerInterface
-    , gameState : GameState
-    , gameid : GameId
-    , playerid : PlayerId
     , otherPlayerid : PlayerId
     , key : Key
     , windowSize : ( Int, Int )
@@ -178,6 +176,12 @@ type alias Model =
     , firstSelection : Decoration
     , chooseFirst : Player
     , player : Player
+    , gameState : GameState
+    , isLocal : Bool
+    , gameid : String
+    , playerid : PlayerId
+    , isLive : Bool
+    , settings : Settings
     }
 
 
@@ -186,9 +190,17 @@ type Msg
     | IncomingMessage ServerInterface Message
     | SetDecoration Decoration
     | SetChooseFirst Player
+    | SetIsLocal Bool
+    | SetName String
+    | SetServerUrl String
+    | SetGameid String
     | SetPage Page
+    | SetHideTitle Bool
     | ResetScore
     | NewGame
+    | StartGame
+    | Join
+    | Disconnect
     | ClearStorage
     | Click ( Int, Int )
     | SetGameCount String
@@ -260,9 +272,6 @@ init flags url key =
     let
         model =
             { interface = proxyServer
-            , gameState = Debug.log "init" <| Interface.emptyGameState (PlayerNames "" "")
-            , gameid = ""
-            , playerid = ""
             , otherPlayerid = ""
             , key = key
             , windowSize = ( 0, 0 )
@@ -274,11 +283,19 @@ init flags url key =
                 , simulatorResult = SimulatorResult 0 0 0 0
                 }
             , seed = Random.initialSeed 0 --get time for this
+
+            -- persistent fields
             , page = MainPage
             , decoration = NoDecoration
             , firstSelection = NoDecoration
             , chooseFirst = Zephyrus
             , player = Zephyrus
+            , gameState = Debug.log "init" <| Interface.emptyGameState (PlayerNames "" "")
+            , isLocal = False
+            , gameid = ""
+            , playerid = ""
+            , isLive = False
+            , settings = Types.emptySettings
             }
     in
     model
@@ -384,6 +401,11 @@ modelToSavedModel model =
     , chooseFirst = model.chooseFirst
     , player = model.player
     , gameState = model.gameState
+    , isLocal = model.isLocal
+    , isLive = model.isLive
+    , gameid = model.gameid
+    , playerid = model.playerid
+    , settings = model.settings
     }
 
 
@@ -396,10 +418,14 @@ savedModelToModel savedModel model =
         , chooseFirst = savedModel.chooseFirst
         , player = savedModel.player
         , gameState = savedModel.gameState
+        , isLocal = savedModel.isLocal
+
+        -- Need to handle this case by reconnecting if True
+        --, isLive = savedModel.isLive
+        , gameid = savedModel.gameid
+        , playerid = savedModel.playerid
+        , settings = savedModel.settings
         , interface = proxyServer
-        , gameid = ""
-        , playerid = ""
-        , otherPlayerid = ""
     }
 
 
@@ -525,18 +551,22 @@ update msg model =
             updateInternal msg model
 
         doSave =
-            case msg of
-                Click _ ->
-                    cmd == Cmd.none
+            Debug.log "doSave" <|
+                case msg of
+                    Click _ ->
+                        cmd == Cmd.none
 
-                IncomingMessage _ _ ->
-                    cmd == Cmd.none
+                    NewGame ->
+                        False
 
-                ClearStorage ->
-                    False
+                    IncomingMessage _ _ ->
+                        cmd == Cmd.none
 
-                _ ->
-                    True
+                    ClearStorage ->
+                        False
+
+                    _ ->
+                        True
     in
     mdl
         |> withCmds
@@ -554,6 +584,9 @@ updateInternal msg model =
     let
         gameState =
             model.gameState
+
+        settings =
+            model.settings
     in
     case msg of
         Noop ->
@@ -570,8 +603,28 @@ updateInternal msg model =
             { model | chooseFirst = player }
                 |> withNoCmd
 
+        SetIsLocal isLocal ->
+            { model | isLocal = isLocal }
+                |> withNoCmd
+
+        SetName name ->
+            { model | settings = { settings | name = name } }
+                |> withNoCmd
+
+        SetServerUrl serverUrl ->
+            { model | settings = { settings | serverUrl = serverUrl } }
+                |> withNoCmd
+
+        SetGameid gameid ->
+            { model | gameid = gameid }
+                |> withNoCmd
+
         SetPage page ->
             { model | page = page }
+                |> withNoCmd
+
+        SetHideTitle hideTitle ->
+            { model | settings = { settings | hideTitle = hideTitle } }
                 |> withNoCmd
 
         ResetScore ->
@@ -636,6 +689,15 @@ updateInternal msg model =
                             , placement = placement
                             }
                     )
+
+        StartGame ->
+            startGame model
+
+        Join ->
+            join model
+
+        Disconnect ->
+            disconnect model
 
         ClearStorage ->
             let
@@ -798,6 +860,24 @@ updateInternal msg model =
 
                 Ok res ->
                     res
+
+
+startGame : Model -> ( Model, Cmd Msg )
+startGame model =
+    { model | isLive = True }
+        |> withNoCmd
+
+
+join : Model -> ( Model, Cmd Msg )
+join model =
+    { model | isLive = True }
+        |> withNoCmd
+
+
+disconnect : Model -> ( Model, Cmd Msg )
+disconnect model =
+    { model | isLive = False }
+        |> withNoCmd
 
 
 send : Model -> Message -> Cmd Msg
@@ -966,6 +1046,9 @@ view model =
     let
         bsize =
             boardSize model
+
+        settings =
+            model.settings
     in
     { title = "ZEPHYRNOT"
     , body =
@@ -974,22 +1057,26 @@ view model =
 
           else
             div []
-                [ div
-                    [ align "center"
-                    ]
-                    [ h1
-                        [ style "margin" "0 0 0.2em 0"
-                        , herculanumStyle
+                [ if settings.hideTitle then
+                    text ""
+
+                  else
+                    div
+                        [ align "center"
                         ]
-                        [ text "Zephyrnot" ]
-                    , h2
-                        [ style "margin" "0 0 0.2em 0"
-                        , herculanumStyle
+                        [ h1
+                            [ style "margin" "0 0 0.2em 0"
+                            , herculanumStyle
+                            ]
+                            [ text "Zephyrnot" ]
+                        , h2
+                            [ style "margin" "0 0 0.2em 0"
+                            , herculanumStyle
+                            ]
+                            [ text "Feud of the Winds" ]
+                        , p [ style "margin" "0" ]
+                            [ text "Invented by Chris St. Clair" ]
                         ]
-                        [ text "Feud of the Winds" ]
-                    , p [ style "margin" "0" ]
-                        [ text "Invented by Chris St. Clair" ]
-                    ]
                 , case model.page of
                     MainPage ->
                         mainPage bsize model
@@ -1010,6 +1097,9 @@ view model =
 mainPage : Int -> Model -> Html Msg
 mainPage bsize model =
     let
+        settings =
+            model.settings
+
         gameState =
             model.gameState
 
@@ -1130,17 +1220,23 @@ mainPage bsize model =
 
                             Notus ->
                                 "Notus"
+                    , br
                     ]
-            , br
-            , b "Choose first: "
+            , if model.isLocal then
+                b "Choose first: "
+
+              else
+                b "You play: "
             , radio "choose"
                 "Zephyrus"
                 (model.chooseFirst == Zephyrus)
+                model.isLive
                 (SetChooseFirst Zephyrus)
             , text " "
             , radio "choose"
                 "Notus"
                 (model.chooseFirst == Notus)
+                model.isLive
                 (SetChooseFirst Notus)
             , br
             , text "Zephyrus/Notus, points: "
@@ -1152,13 +1248,22 @@ mainPage bsize model =
             , text "/"
             , text <| String.fromInt score.notusGames
             , text " "
-            , if not <| isSimulated model then
+            , if not model.isLocal then
                 text ""
 
               else
                 button [ onClick ResetScore ]
                     [ text "Reset" ]
             , br
+            , b "Local: "
+            , input
+                [ type_ "checkbox"
+                , checked model.isLocal
+                , onCheck SetIsLocal
+                , disabled model.isLive
+                ]
+                []
+            , text " "
             , button
                 [ onClick NewGame ]
                 [ text <|
@@ -1168,6 +1273,58 @@ mainPage bsize model =
                     else
                         "New Game"
                 ]
+            , if model.isLocal then
+                text ""
+
+              else
+                div [ align "center" ]
+                    [ if model.isLive then
+                        div [ align "center" ]
+                            [ button
+                                [ onClick Disconnect ]
+                                [ text "Disconnect" ]
+                            ]
+
+                      else
+                        div [ align "center" ]
+                            [ b "Your Name: "
+                            , input
+                                [ onInput SetName
+                                , value settings.name
+                                , size 20
+                                ]
+                                []
+                            , br
+                            , b "Server: "
+                            , input
+                                [ onInput SetServerUrl
+                                , value settings.serverUrl
+                                , size 20
+                                ]
+                                []
+                            , text " "
+                            , button
+                                [ onClick StartGame
+                                , disabled <| settings.name == ""
+                                ]
+                                [ text "Start Game" ]
+                            , br
+                            , b "Game ID: "
+                            , input
+                                [ onInput SetGameid
+                                , value model.gameid
+                                , size 16
+                                ]
+                                []
+                            , text " "
+                            , button
+                                [ onClick Join
+                                , disabled <| settings.name == ""
+                                ]
+                                [ text "Join"
+                                ]
+                            ]
+                    ]
             ]
         , p []
             [ text "Moves: "
@@ -1261,27 +1418,29 @@ decorationRadios model =
                     ( False, ( False, False, True ) )
     in
     p []
-        [ radio "decoration" "none" none (SetDecoration NoDecoration)
+        [ radio "decoration" "none" none False (SetDecoration NoDecoration)
         , text " "
-        , radio "decoration" "row" rowp (SetDecoration (RowSelectedDecoration 3))
+        , radio "decoration" "row" rowp False (SetDecoration (RowSelectedDecoration 3))
         , text " "
-        , radio "decoration" "col" colp (SetDecoration (ColSelectedDecoration 2))
+        , radio "decoration" "col" colp False (SetDecoration (ColSelectedDecoration 2))
         , text " "
         , radio "decoration"
             "conflict"
             filledp
+            False
             (SetDecoration (AlreadyFilledDecoration ( 1, 3 )))
         ]
 
 
-radio : String -> String -> Bool -> msg -> Html msg
-radio group name isChecked msg =
+radio : String -> String -> Bool -> Bool -> msg -> Html msg
+radio group name isChecked isDisabled msg =
     label []
         [ input
             [ type_ "radio"
             , Attributes.name group
             , onClick msg
             , checked isChecked
+            , disabled isDisabled
             ]
             []
         , text name
@@ -1321,6 +1480,33 @@ instructionsPage bsize model =
             [ br, b "Instructions" ]
         , rulesDiv False
             [ Markdown.toHtml [] """
+Play may either be networked, through the server at zephyrus.com, or
+local, with no server connection. The "Local" checkbox controls this.
+
+**Networked Play**
+
+The "You play" radio buttons control which player you will be if you
+click "Start Game". Zephyrus is the first stone placer.
+
+Fill in "Your Name", change the "Server", if you're using something
+other than the default, and either click "Start Game" or fill in the
+"Game ID" and click "Join". If you "Start Game", the "Game ID" will be
+filled in, and you'll need to give this to the other player, so they
+can "Join" (public games will come soon).
+
+After both players are connected, on each turn, Zephyrus clicks a
+column and Notus clicks a row. Instructions continue at "Both Local
+and Networked" below.
+
+**Local Play**
+
+The "Choose first" radio buttons control which player chooses a row or
+column first for each stone placement. This is amenable to using a
+portable device (e.g. a smart phone or tablet), and passing it back
+and forth to make selections.
+
+The "Reset" button resets the score numbers to 0.
+
 The players must choose who will be Zephyrus, placing the first stone,
 and attempting to create a path connecting the east and west
 edges, and who will be Notus, placing the second stone, and attempting
@@ -1332,6 +1518,8 @@ change the selection, or the same column again to choose it.
 Notus taps a row to select it, then taps another row to
 change the selection, or the same column again to choose it.
 
+**Both Local and Networked**
+
 After both players have made their selection, the stone at the
 intersection of the selected row and column is placed. If there is
 already a stone there, it is highlighted in red, and the player
@@ -1341,13 +1529,15 @@ unoccupied.
 Play continues until there is a path connecting two opposite
 edges. Click the "New Game" button to play again.
 
-In non-networked play, the "Choose first" radio buttons control which
-player chooses a row or column first for each stone placement. This is
-amenable to using a portable device (e.g. a smart phone or tablet),
-and passing it back and forth to make selections.
-
 Click the "Clear" button at the bottom of the page to remove all stored
 state from your browser, and restart with an empty board.
+
+The "Aux" page has a "Hide Title" checkbox, which, if checked, hides
+the title at the top of the page, making more fit in your browser
+without scrolling. The "Simulate" button will run the number of games
+in the "Game Count" text box, using random moves, and display the
+outcome.
+
 """
             ]
         , playButton
@@ -1467,6 +1657,9 @@ auxPage bsize model =
 
         percent =
             100 * horizontalWins // (horizontalWins + verticalWins)
+
+        settings =
+            model.settings
     in
     rulesDiv False
         [ br
@@ -1474,7 +1667,15 @@ auxPage bsize model =
         , rulesDiv True
             [ br, b "Aux" ]
         , p [ align "center" ]
-            [ b "Game Count: "
+            [ b "Hide Title: "
+            , input
+                [ type_ "checkbox"
+                , checked settings.hideTitle
+                , onCheck SetHideTitle
+                ]
+                []
+            , br
+            , b "Game Count: "
             , input
                 [ onInput SetGameCount
                 , value simulatorState.gameCountString

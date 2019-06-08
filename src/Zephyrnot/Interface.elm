@@ -116,7 +116,9 @@ messageProcessor state message =
                                 emptyGameState players
 
                             Just gs ->
-                                { gs | players = players }
+                                { gs
+                                    | players = players
+                                }
 
                     ( gameid, state2 ) =
                         ServerInterface.newGameid state

@@ -57,6 +57,7 @@
         } else {
           var str = JSON.stringify(json);
           if (typeof(str) == 'string') {
+            console.log('localStorage.setItem', key, str);
             localStorage.setItem(key, str);
           }
         }
