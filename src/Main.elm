@@ -80,8 +80,8 @@ import Json.Decode as JD exposing (Decoder, Value)
 import Json.Encode as JE
 import Markdown
 import PortFunnel.LocalStorage as LocalStorage
-import PortFunnel.LocalStorage.Sequence as Sequence exposing (KeyPair)
-import PortFunnels exposing (FunnelDict, Handler(..))
+import PortFunnel.WebSocket as WebSocket exposing (Response(..))
+import PortFunnels exposing (FunnelDict, Handler(..), State)
 import Random exposing (Seed)
 import Svg exposing (Svg, foreignObject, g, line, rect, svg)
 import Svg.Attributes
@@ -108,6 +108,7 @@ import Svg.Events
 import Task
 import Time exposing (Posix)
 import Url exposing (Url)
+import WebSocketFramework.EncodeDecode as WSFED
 import WebSocketFramework.ServerInterface as ServerInterface
 import WebSocketFramework.Types
     exposing
@@ -161,14 +162,23 @@ type alias ServerInterface =
     WebSocketFramework.Types.ServerInterface GameState Player Message Msg
 
 
+type ConnectionReason
+    = NoConnection
+    | StartGameConnection
+    | JoinGameConnection
+
+
 type alias Model =
     { interface : ServerInterface
+    , connectionReason : ConnectionReason
+    , funnelState : State
     , otherPlayerid : PlayerId
     , key : Key
     , windowSize : ( Int, Int )
     , started : Bool --True when persistent storage is available
     , simulatorState : SimulatorState --for the "Aux"  page
     , seed : Seed
+    , error : Maybe String
 
     -- persistent below here
     , page : Page
@@ -210,7 +220,7 @@ type Msg
     | WindowResize Int Int
     | HandleUrlRequest UrlRequest
     | HandleUrlChange Url
-    | ProcessLocalStorage Value
+    | Process Value
 
 
 main =
@@ -272,6 +282,8 @@ init flags url key =
     let
         model =
             { interface = proxyServer
+            , connectionReason = NoConnection
+            , funnelState = initialFunnelState
             , otherPlayerid = ""
             , key = key
             , windowSize = ( 0, 0 )
@@ -283,6 +295,7 @@ init flags url key =
                 , simulatorResult = SimulatorResult 0 0 0 0
                 }
             , seed = Random.initialSeed 0 --get time for this
+            , error = Nothing
 
             -- persistent fields
             , page = MainPage
@@ -544,6 +557,78 @@ incomingMessage interface message mdl =
             model |> withNoCmd
 
 
+socketHandler : Response -> State -> Model -> ( Model, Cmd Msg )
+socketHandler response state mdl =
+    let
+        model =
+            { mdl | funnelState = state }
+    in
+    case response of
+        ErrorResponse error ->
+            { model | error = Just <| WebSocket.errorToString error }
+                |> withNoCmd
+
+        WebSocket.MessageReceivedResponse received ->
+            let
+                string =
+                    received.message
+            in
+            case WSFED.decodeMessage ED.messageDecoder string of
+                Err errmsg ->
+                    { model | error = Just errmsg }
+                        |> withNoCmd
+
+                Ok message ->
+                    { model | error = Nothing }
+                        |> withCmd
+                            (Task.perform (IncomingMessage model.interface) <|
+                                Task.succeed message
+                            )
+
+        ConnectedResponse _ ->
+            { model
+                | connectionReason = NoConnection
+                , error = Nothing
+            }
+                |> withCmd
+                    (case model.connectionReason of
+                        NoConnection ->
+                            Cmd.none
+
+                        StartGameConnection ->
+                            send model <|
+                                NewReq
+                                    { name = model.settings.name
+                                    , player = model.chooseFirst
+                                    , isPublic = False
+                                    , restoreState = Nothing
+                                    }
+
+                        JoinGameConnection ->
+                            send model <|
+                                JoinReq
+                                    { gameid = model.gameid
+                                    , name = model.settings.name
+                                    }
+                    )
+
+        ClosedResponse { expected, reason } ->
+            { model
+                | isLive = False
+                , connectionReason = NoConnection
+                , error =
+                    if expected then
+                        Nothing
+
+                    else
+                        Just <| "Connection unexpectedly closed: " ++ reason
+            }
+                |> withNoCmd
+
+        _ ->
+            model |> withNoCmd
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let
@@ -551,22 +636,21 @@ update msg model =
             updateInternal msg model
 
         doSave =
-            Debug.log "doSave" <|
-                case msg of
-                    Click _ ->
-                        cmd == Cmd.none
+            case msg of
+                Click _ ->
+                    cmd == Cmd.none
 
-                    NewGame ->
-                        False
+                NewGame ->
+                    False
 
-                    IncomingMessage _ _ ->
-                        cmd == Cmd.none
+                IncomingMessage _ _ ->
+                    cmd == Cmd.none
 
-                    ClearStorage ->
-                        False
+                ClearStorage ->
+                    False
 
-                    _ ->
-                        True
+                _ ->
+                    True
     in
     mdl
         |> withCmds
@@ -846,11 +930,11 @@ updateInternal msg model =
         HandleUrlChange url ->
             model |> withNoCmd
 
-        ProcessLocalStorage value ->
+        Process value ->
             case
                 PortFunnels.processValue funnelDict
                     value
-                    funnelState
+                    model.funnelState
                     model
             of
                 Err error ->
@@ -1018,7 +1102,7 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ Events.onResize WindowResize
-        , PortFunnels.subscriptions ProcessLocalStorage model
+        , PortFunnels.subscriptions Process model
         ]
 
 
@@ -1182,7 +1266,16 @@ mainPage bsize model =
             gameState.board
         , p
             []
-            [ span
+            [ case model.error of
+                Nothing ->
+                    text ""
+
+                Just err ->
+                    span [ style "color" "red" ]
+                        [ text err
+                        , br
+                        ]
+            , span
                 [ style "color"
                     (if gameState.winner == NoWinner then
                         "red"
@@ -1765,34 +1858,36 @@ clear =
     localStorageSend (LocalStorage.clear "")
 
 
+localStoragePrefix : String
+localStoragePrefix =
+    "zephyrnot"
+
+
+initialFunnelState : PortFunnels.State
+initialFunnelState =
+    PortFunnels.initialState localStoragePrefix
+
+
 localStorageSend : LocalStorage.Message -> Cmd Msg
 localStorageSend message =
     LocalStorage.send (getCmdPort LocalStorage.moduleName ())
         message
-        funnelState.storage
+        initialFunnelState.storage
 
 
 {-| The `model` parameter is necessary here for `PortFunnels.makeFunnelDict`.
 -}
 getCmdPort : String -> model -> (Value -> Cmd Msg)
 getCmdPort moduleName _ =
-    PortFunnels.getCmdPort ProcessLocalStorage moduleName False
-
-
-localStoragePrefix : String
-localStoragePrefix =
-    "zephyrnot"
-
-
-funnelState : PortFunnels.State
-funnelState =
-    PortFunnels.initialState localStoragePrefix
+    PortFunnels.getCmdPort Process moduleName False
 
 
 funnelDict : FunnelDict Model Msg
 funnelDict =
     PortFunnels.makeFunnelDict
-        [ LocalStorageHandler storageHandler ]
+        [ LocalStorageHandler storageHandler
+        , WebSocketHandler socketHandler
+        ]
         getCmdPort
 
 
