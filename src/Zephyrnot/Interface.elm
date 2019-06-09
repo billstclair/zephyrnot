@@ -142,6 +142,7 @@ messageProcessor state message =
                         , playerid = playerid
                         , player = player
                         , name = name
+                        , gameState = gameState
                         }
                 )
 
@@ -208,13 +209,17 @@ messageProcessor state message =
                 Nothing ->
                     errorRes message state "Unknown playerid"
 
-                Just { gameid } ->
+                Just { gameid, player } ->
                     let
                         state2 =
                             ServerInterface.removeGame gameid state
                     in
                     ( state2
-                    , Just <| LeaveRsp { gameid = gameid }
+                    , Just <|
+                        LeaveRsp
+                            { gameid = gameid
+                            , player = player
+                            }
                     )
 
         UpdateReq { playerid } ->

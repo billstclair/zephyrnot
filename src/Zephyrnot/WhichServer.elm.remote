@@ -1,0 +1,6 @@
+module Zephyrnot.WhichServer exposing (serverUrl)
+
+
+serverUrl : String
+serverUrl =
+    "wss://zephyrnot.com/zephyrnot-server"

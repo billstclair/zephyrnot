@@ -96,7 +96,6 @@ zeroScore =
 
 type alias Settings =
     { name : String
-    , serverUrl : String
     , hideTitle : Bool
     }
 
@@ -104,7 +103,6 @@ type alias Settings =
 emptySettings : Settings
 emptySettings =
     { name = ""
-    , serverUrl = "ws://localhost:8081"
     , hideTitle = False
     }
 
@@ -177,6 +175,7 @@ type Message
         , playerid : PlayerId
         , player : Player
         , name : String
+        , gameState : GameState
         }
     | JoinReq
         { gameid : GameId
@@ -193,7 +192,7 @@ type Message
         , gameState : GameState
         }
     | LeaveReq { playerid : PlayerId }
-    | LeaveRsp { gameid : GameId }
+    | LeaveRsp { gameid : GameId, player : Player }
     | UpdateReq { playerid : PlayerId }
     | UpdateRsp
         { gameid : String
@@ -293,6 +292,9 @@ messageToGameid message =
         JoinReq { gameid } ->
             Just gameid
 
+        JoinRsp { gameid } ->
+            Just gameid
+
         LeaveRsp { gameid } ->
             Just gameid
 
@@ -303,6 +305,9 @@ messageToGameid message =
             Just gameid
 
         ResignRsp { gameid } ->
+            Just gameid
+
+        AnotherGameRsp { gameid } ->
             Just gameid
 
         GameOverRsp { gameid } ->

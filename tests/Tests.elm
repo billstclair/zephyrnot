@@ -115,12 +115,14 @@ protocolData =
         , playerid = "76"
         , player = Zephyrus
         , name = "Joe"
+        , gameState = gameState1
         }
     , NewRsp
         { gameid = "123a"
         , playerid = "76b"
         , player = Notus
         , name = "Joel"
+        , gameState = gameState2
         }
     , JoinReq
         { gameid = "123"
@@ -143,7 +145,8 @@ protocolData =
         , gameState = gameState2
         }
     , LeaveReq { playerid = "77" }
-    , LeaveRsp { gameid = "123" }
+    , LeaveRsp { gameid = "123", player = Zephyrus }
+    , LeaveRsp { gameid = "123", player = Notus }
     , UpdateReq { playerid = "77" }
     , UpdateRsp
         { gameid = "123"

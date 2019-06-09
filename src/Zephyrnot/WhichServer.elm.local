@@ -1,0 +1,6 @@
+module Zephyrnot.WhichServer exposing (serverUrl)
+
+
+serverUrl : String
+serverUrl =
+    "ws://localhost:8081"

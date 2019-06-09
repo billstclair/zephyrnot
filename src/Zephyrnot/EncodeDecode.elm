@@ -402,10 +402,9 @@ scoreDecoder =
 
 
 encodeSettings : Settings -> Value
-encodeSettings { name, serverUrl, hideTitle } =
+encodeSettings { name, hideTitle } =
     JE.object
         [ ( "name", JE.string name )
-        , ( "serverUrl", JE.string serverUrl )
         , ( "hideTitle", JE.bool hideTitle )
         ]
 
@@ -414,7 +413,6 @@ settingsDecoder : Decoder Settings
 settingsDecoder =
     JD.succeed Settings
         |> required "name" JD.string
-        |> required "serverUrl" JD.string
         |> required "hideTitle" JD.bool
 
 
@@ -564,12 +562,13 @@ messageEncoderInternal includePrivate message =
               ]
             )
 
-        NewRsp { gameid, playerid, player, name } ->
+        NewRsp { gameid, playerid, player, name, gameState } ->
             ( Rsp "new"
             , [ ( "gameid", JE.string gameid )
               , ( "playerid", JE.string playerid )
               , ( "player", encodePlayer player )
               , ( "name", JE.string name )
+              , ( "gameState", encodeGameState includePrivate gameState )
               ]
             )
 
@@ -608,9 +607,11 @@ messageEncoderInternal includePrivate message =
             , [ ( "playerid", JE.string playerid ) ]
             )
 
-        LeaveRsp { gameid } ->
+        LeaveRsp { gameid, player } ->
             ( Rsp "leave"
-            , [ ( "gameid", JE.string gameid ) ]
+            , [ ( "gameid", JE.string gameid )
+              , ( "player", encodePlayer player )
+              ]
             )
 
         UpdateReq { playerid } ->
@@ -780,18 +781,20 @@ chatReqDecoder =
 newRspDecoder : Decoder Message
 newRspDecoder =
     JD.succeed
-        (\gameid playerid player name ->
+        (\gameid playerid player name gameState ->
             NewRsp
                 { gameid = gameid
                 , playerid = playerid
                 , player = player
                 , name = name
+                , gameState = gameState
                 }
         )
         |> required "gameid" JD.string
         |> required "playerid" JD.string
         |> required "player" playerDecoder
         |> required "name" JD.string
+        |> required "gameState" gameStateDecoder
 
 
 joinRspDecoder : Decoder Message
@@ -814,12 +817,14 @@ joinRspDecoder =
 leaveRspDecoder : Decoder Message
 leaveRspDecoder =
     JD.succeed
-        (\gameid ->
+        (\gameid player ->
             LeaveRsp
                 { gameid = gameid
+                , player = player
                 }
         )
         |> required "gameid" JD.string
+        |> required "player" playerDecoder
 
 
 updateRspDecoder : Decoder Message

@@ -147,7 +147,7 @@ sendJoinRsp model response socket =
         JoinRsp record ->
             Cmd.batch
                 [ sendToOne response socket
-                , sendToOthers model
+                , sendToOthers (Debug.log "sendJoinRsp toOthers" model)
                     (JoinRsp { record | playerid = Nothing })
                     socket
                 ]
