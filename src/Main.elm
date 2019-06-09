@@ -196,6 +196,15 @@ type alias Model =
     }
 
 
+isPlaying : Model -> Bool
+isPlaying model =
+    let
+        { zephyrus, notus } =
+            model.gameState.players
+    in
+    model.isLive && zephyrus /= "" && notus /= ""
+
+
 type Msg
     = Noop
     | IncomingMessage ServerInterface Message
@@ -458,6 +467,7 @@ incomingMessage interface message mdl =
                 , playerid = pid
                 , otherPlayerid = opid
                 , isLive = True
+                , connectionReason = JoinGameConnection
             }
                 |> withCmd
                     (if player == Zephyrus then
@@ -479,12 +489,28 @@ incomingMessage interface message mdl =
                             ""
                 , gameState = gameState
                 , isLive = True
+                , connectionReason = NoConnection
             }
                 |> withNoCmd
 
         LeaveRsp { gameid } ->
-            -- Leave only happens with a network server
-            model |> withNoCmd
+            let
+                model2 =
+                    { model
+                        | gameid = ""
+                        , playerid = ""
+                        , otherPlayerid = ""
+                    }
+            in
+            if model.isLocal then
+                model2 |> withNoCmd
+
+            else
+                { model2 | isLive = False }
+                    |> withCmd
+                        (WebSocket.makeClose model.settings.serverUrl
+                            |> webSocketSend
+                        )
 
         UpdateRsp { gameid, gameState } ->
             { model
@@ -538,13 +564,26 @@ incomingMessage interface message mdl =
 
         ErrorRsp { request, text } ->
             let
-                req =
-                    Debug.log "Error, request:" request
-
-                txt =
-                    Debug.log "  text:" text
+                model2 =
+                    { model
+                        | error = Just text
+                        , connectionReason = NoConnection
+                    }
             in
-            model |> withNoCmd
+            model2
+                |> withCmd
+                    (if
+                        not model2.isLocal
+                            && (Debug.log "connectionReason" model.connectionReason
+                                    /= NoConnection
+                               )
+                     then
+                        WebSocket.makeClose model2.settings.serverUrl
+                            |> webSocketSend
+
+                     else
+                        Cmd.none
+                    )
 
         ChatRsp { gameid, name, text } ->
             -- No chat yet
@@ -583,10 +622,7 @@ socketHandler response state mdl =
                             )
 
         ConnectedResponse _ ->
-            { model
-                | connectionReason = NoConnection
-                , error = Nothing
-            }
+            { model | error = Nothing }
                 |> withCmd
                     (case model.connectionReason of
                         NoConnection ->
@@ -614,8 +650,8 @@ socketHandler response state mdl =
                 | isLive = False
                 , connectionReason = NoConnection
                 , error =
-                    if expected then
-                        Nothing
+                    if Debug.log "ClosedResponse, expected" expected then
+                        model.error
 
                     else
                         Just <| "Connection unexpectedly closed: " ++ reason
@@ -685,8 +721,35 @@ updateInternal msg model =
                 |> withNoCmd
 
         SetIsLocal isLocal ->
-            { model | isLocal = isLocal }
-                |> withNoCmd
+            let
+                model2 =
+                    { model
+                        | isLocal = isLocal
+                        , isLive = False
+                        , interface =
+                            if isLocal then
+                                proxyServer
+
+                            else
+                                model.interface
+                    }
+            in
+            model2
+                |> withCmd
+                    (if isLocal && not model.isLocal then
+                        Cmd.batch
+                            [ if model.isLive then
+                                send model <|
+                                    LeaveReq { playerid = model.playerid }
+
+                              else
+                                Cmd.none
+                            , send model2 <| NewReq initialNewReqBody
+                            ]
+
+                     else
+                        Cmd.none
+                    )
 
         SetName name ->
             { model | settings = { settings | name = name } }
@@ -993,7 +1056,14 @@ join model =
 disconnect : Model -> ( Model, Cmd Msg )
 disconnect model =
     { model | isLive = False }
-        |> withNoCmd
+        |> withCmd
+            (if model.isLive && not model.isLocal then
+                send model <|
+                    LeaveReq { playerid = model.playerid }
+
+             else
+                Cmd.none
+            )
 
 
 send : Model -> Message -> Cmd Msg
@@ -1225,69 +1295,87 @@ mainPage bsize model =
         count =
             Board.count gameState.board
 
+        { zephyrus, notus } =
+            gameState.players
+
         message =
-            case gameState.winner of
-                ZephyrusWinner ->
-                    "Zephyrus wins in " ++ String.fromInt count ++ "!"
+            if not model.isLive then
+                "Enter \"Your Name\" and either click \"Start Game\" or enter \"Game ID\" and click \"Join\""
 
-                NotusWinner ->
-                    "Notus wins in " ++ String.fromInt count ++ "!"
+            else if zephyrus == "" || notus == "" then
+                let
+                    waitingFor =
+                        if zephyrus == "" then
+                            "Notus"
 
-                NoWinner ->
-                    case model.firstSelection of
-                        RowSelectedDecoration _ ->
-                            case model.decoration of
-                                NoDecoration ->
-                                    "Notus chose. Zephyrus pick a column"
+                        else
+                            "Zephyrus"
+                in
+                "Waiting for " ++ waitingFor ++ " to join"
 
-                                AlreadyFilledDecoration _ ->
-                                    case gameState.whoseTurn of
-                                        Zephyrus ->
+            else
+                case gameState.winner of
+                    ZephyrusWinner ->
+                        "Zephyrus wins in " ++ String.fromInt count ++ "!"
+
+                    NotusWinner ->
+                        "Notus wins in " ++ String.fromInt count ++ "!"
+
+                    NoWinner ->
+                        case model.firstSelection of
+                            RowSelectedDecoration _ ->
+                                case model.decoration of
+                                    NoDecoration ->
+                                        "Notus chose. Zephyrus pick a column"
+
+                                    AlreadyFilledDecoration _ ->
+                                        case gameState.whoseTurn of
+                                            Zephyrus ->
+                                                "Zephyrus pick another column"
+
+                                            Notus ->
+                                                "Notus pick another row"
+
+                                    _ ->
+                                        "Notus chose. Zephyrus confirm or pick another column"
+
+                            ColSelectedDecoration _ ->
+                                case model.decoration of
+                                    NoDecoration ->
+                                        "Zephyrus chose. Notus pick a row"
+
+                                    AlreadyFilledDecoration _ ->
+                                        case gameState.whoseTurn of
+                                            Zephyrus ->
+                                                "Zephyrus pick another column"
+
+                                            Notus ->
+                                                "Notus pick another row"
+
+                                    _ ->
+                                        "Zephyrus chose. Notus confirm or pick another row"
+
+                            _ ->
+                                case model.decoration of
+                                    NoDecoration ->
+                                        if model.chooseFirst == Zephyrus then
+                                            "Zephyrus pick a column"
+
+                                        else
+                                            "Notus pick a row"
+
+                                    ColSelectedDecoration _ ->
+                                        "Zephyrus confirm or pick another column"
+
+                                    RowSelectedDecoration _ ->
+                                        "Notus confirm or pick another row"
+
+                                    AlreadyFilledDecoration _ ->
+                                        if gameState.whoseTurn == Zephyrus then
                                             "Zephyrus pick another column"
 
-                                        Notus ->
+                                        else
                                             "Notus pick another row"
-
-                                _ ->
-                                    "Notus chose. Zephyrus confirm or pick another column"
-
-                        ColSelectedDecoration _ ->
-                            case model.decoration of
-                                NoDecoration ->
-                                    "Zephyrus chose. Notus pick a row"
-
-                                AlreadyFilledDecoration _ ->
-                                    case gameState.whoseTurn of
-                                        Zephyrus ->
-                                            "Zephyrus pick another column"
-
-                                        Notus ->
-                                            "Notus pick another row"
-
-                                _ ->
-                                    "Zephyrus chose. Notus confirm or pick another row"
-
-                        _ ->
-                            case model.decoration of
-                                NoDecoration ->
-                                    if model.chooseFirst == Zephyrus then
-                                        "Zephyrus pick a column"
-
-                                    else
-                                        "Notus pick a row"
-
-                                ColSelectedDecoration _ ->
-                                    "Zephyrus confirm or pick another column"
-
-                                RowSelectedDecoration _ ->
-                                    "Notus confirm or pick another row"
-
-                                AlreadyFilledDecoration _ ->
-                                    if gameState.whoseTurn == Zephyrus then
-                                        "Zephyrus pick another column"
-
-                                    else
-                                        "Notus pick another row"
     in
     div [ align "center" ]
         [ Board.render bsize
@@ -1310,7 +1398,7 @@ mainPage bsize model =
             , span
                 [ style "color"
                     (if gameState.winner == NoWinner then
-                        "red"
+                        "green"
 
                      else
                         "orange"
@@ -1385,13 +1473,13 @@ mainPage bsize model =
                 [ type_ "checkbox"
                 , checked model.isLocal
                 , onCheck SetIsLocal
-                , disabled model.isLive
+                , disabled <| not model.isLocal && model.isLive
                 ]
                 []
             , text " "
             , button
                 [ onClick NewGame
-                , disabled <| not model.isLive
+                , disabled (not <| isPlaying model)
                 ]
                 [ text <|
                     if gameState.winner == NoWinner then
@@ -1407,7 +1495,15 @@ mainPage bsize model =
                 div [ align "center" ]
                     [ if model.isLive then
                         div [ align "center" ]
-                            [ button
+                            [ b "Game ID: "
+                            , input
+                                [ value model.gameid
+                                , size 16
+                                , disabled True
+                                ]
+                                []
+                            , br
+                            , button
                                 [ onClick Disconnect ]
                                 [ text "Disconnect" ]
                             ]
@@ -1446,7 +1542,9 @@ mainPage bsize model =
                             , text " "
                             , button
                                 [ onClick Join
-                                , disabled <| settings.name == ""
+                                , disabled <|
+                                    (settings.name == "")
+                                        || (model.gameid == "")
                                 ]
                                 [ text "Join"
                                 ]
