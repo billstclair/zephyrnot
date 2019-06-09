@@ -108,6 +108,7 @@ import Svg.Events
 import Task
 import Time exposing (Posix)
 import Url exposing (Url)
+import WebSocketFramework
 import WebSocketFramework.EncodeDecode as WSFED
 import WebSocketFramework.ServerInterface as ServerInterface
 import WebSocketFramework.Types
@@ -270,13 +271,6 @@ proxyServer =
     ServerInterface.makeProxyServer fullProcessor IncomingMessage
 
 
-isSimulated : Model -> Bool
-isSimulated model =
-    case model.interface of
-        ServerInterface { wrapper } ->
-            wrapper == IncomingMessage
-
-
 init : Value -> url -> Key -> ( Model, Cmd Msg )
 init flags url key =
     let
@@ -315,7 +309,6 @@ init flags url key =
         |> withCmds
             [ Task.perform getViewport Dom.getViewport
             , Task.perform InitializeSeed Time.now
-            , send model initialNewReq
             ]
 
 
@@ -391,12 +384,16 @@ storageHandler response state model =
                                     mdl2
                                         |> withCmds
                                             [ cmd
-                                            , send mdl2 <|
-                                                NewReq
-                                                    { initialNewReqBody
-                                                        | restoreState =
-                                                            Just mdl2.gameState
-                                                    }
+                                            , if mdl2.isLocal then
+                                                send mdl2 <|
+                                                    NewReq
+                                                        { initialNewReqBody
+                                                            | restoreState =
+                                                                Just mdl2.gameState
+                                                        }
+
+                                              else
+                                                Cmd.none
                                             ]
 
                 _ ->
@@ -432,9 +429,7 @@ savedModelToModel savedModel model =
         , player = savedModel.player
         , gameState = savedModel.gameState
         , isLocal = savedModel.isLocal
-
-        -- Need to handle this case by reconnecting if True
-        --, isLive = savedModel.isLive
+        , isLive = False -- Need to handle this case by reconnecting if True
         , gameid = savedModel.gameid
         , playerid = savedModel.playerid
         , settings = savedModel.settings
@@ -462,6 +457,7 @@ incomingMessage interface message mdl =
                 | gameid = gameid
                 , playerid = pid
                 , otherPlayerid = opid
+                , isLive = True
             }
                 |> withCmd
                     (if player == Zephyrus then
@@ -482,6 +478,7 @@ incomingMessage interface message mdl =
                         Nothing ->
                             ""
                 , gameState = gameState
+                , isLive = True
             }
                 |> withNoCmd
 
@@ -712,7 +709,7 @@ updateInternal msg model =
                 |> withNoCmd
 
         ResetScore ->
-            if not <| isSimulated model then
+            if not <| model.isLocal then
                 model |> withNoCmd
 
             else
@@ -763,7 +760,15 @@ updateInternal msg model =
                         )
 
                     else
-                        ( model.playerid, ChooseNew Zephyrus )
+                        let
+                            player =
+                                if model.isLocal then
+                                    Zephyrus
+
+                                else
+                                    model.chooseFirst
+                        in
+                        ( model.playerid, ChooseNew player )
             in
             model
                 |> withCmd
@@ -946,16 +951,43 @@ updateInternal msg model =
                     res
 
 
+makeWebSocketServer : Model -> ServerInterface
+makeWebSocketServer model =
+    WebSocketFramework.makeServer
+        (getCmdPort WebSocket.moduleName ())
+        ED.messageEncoder
+        model.settings.serverUrl
+        Noop
+
+
+webSocketConnect : ConnectionReason -> Model -> ( Model, Cmd Msg )
+webSocketConnect reason model =
+    if model.isLocal then
+        { model
+            | interface = proxyServer
+            , isLive = True
+        }
+            |> withNoCmd
+
+    else
+        { model
+            | interface = makeWebSocketServer model
+            , connectionReason = reason
+        }
+            |> withCmd
+                (WebSocket.makeOpen model.settings.serverUrl
+                    |> webSocketSend
+                )
+
+
 startGame : Model -> ( Model, Cmd Msg )
 startGame model =
-    { model | isLive = True }
-        |> withNoCmd
+    webSocketConnect StartGameConnection model
 
 
 join : Model -> ( Model, Cmd Msg )
 join model =
-    { model | isLive = True }
-        |> withNoCmd
+    webSocketConnect JoinGameConnection model
 
 
 disconnect : Model -> ( Model, Cmd Msg )
@@ -1358,7 +1390,9 @@ mainPage bsize model =
                 []
             , text " "
             , button
-                [ onClick NewGame ]
+                [ onClick NewGame
+                , disabled <| not model.isLive
+                ]
                 [ text <|
                     if gameState.winner == NoWinner then
                         "Resign"
@@ -1873,6 +1907,12 @@ localStorageSend message =
     LocalStorage.send (getCmdPort LocalStorage.moduleName ())
         message
         initialFunnelState.storage
+
+
+webSocketSend : WebSocket.Message -> Cmd Msg
+webSocketSend message =
+    WebSocket.send (getCmdPort WebSocket.moduleName ()) <|
+        Debug.log "webSocketSend" message
 
 
 {-| The `model` parameter is necessary here for `PortFunnels.makeFunnelDict`.
