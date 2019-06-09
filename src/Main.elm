@@ -1217,14 +1217,15 @@ doClick row col model =
             _ ->
                 case model.decoration of
                     NoDecoration ->
-                        model
-                            |> (withPlayReq model.playerid <|
-                                    if model.chooseFirst == Zephyrus then
-                                        ChooseCol col
+                        { model
+                            | decoration =
+                                if model.chooseFirst == Zephyrus then
+                                    ColSelectedDecoration col
 
-                                    else
-                                        ChooseRow row
-                               )
+                                else
+                                    RowSelectedDecoration row
+                        }
+                            |> withNoCmd
 
                     ColSelectedDecoration c ->
                         if c == col then
@@ -1557,6 +1558,10 @@ mainPage bsize model =
                     ]
 
               else
+                let
+                    disabled =
+                        model.isLive && not model.isLocal
+                in
                 span []
                     [ b <|
                         if model.isLocal then
@@ -1567,13 +1572,13 @@ mainPage bsize model =
                     , radio "choose"
                         "Zephyrus"
                         (model.chooseFirst == Zephyrus)
-                        model.isLive
+                        disabled
                         (SetChooseFirst Zephyrus)
                     , text " "
                     , radio "choose"
                         "Notus"
                         (model.chooseFirst == Notus)
-                        model.isLive
+                        disabled
                         (SetChooseFirst Notus)
                     ]
             , br
