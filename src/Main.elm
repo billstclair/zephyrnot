@@ -486,6 +486,12 @@ incomingMessage interface message mdl =
                         , isLive = True
                         , connectionReason = NoConnection
                         , decoration = gameState.private.decoration
+                        , chooseFirst =
+                            if playerid == Nothing then
+                                model.chooseFirst
+
+                            else
+                                player
                     }
 
                 model3 =
@@ -1366,10 +1372,10 @@ mainPage bsize model =
                 let
                     waitingFor =
                         if zephyrus == "" then
-                            "Notus"
+                            "Zephyrus"
 
                         else
-                            "Zephyrus"
+                            "Notus"
                 in
                 "Waiting for " ++ waitingFor ++ " to join"
 
