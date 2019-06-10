@@ -939,15 +939,29 @@ updateInternal msg model =
 
         NewGame ->
             let
-                ( playerid, placement ) =
-                    if gameState.winner == NoWinner then
-                        ( case gameState.whoseTurn of
+                resigning =
+                    if not model.isLocal then
+                        model.chooseFirst
+
+                    else
+                        gameState.whoseTurn
+
+                pid =
+                    if not model.isLocal then
+                        model.playerid
+
+                    else
+                        case resigning of
                             Zephyrus ->
                                 model.playerid
 
                             Notus ->
                                 model.otherPlayerid
-                        , ChooseResign gameState.whoseTurn
+
+                ( playerid, placement ) =
+                    if gameState.winner == NoWinner then
+                        ( pid
+                        , ChooseResign resigning
                         )
 
                     else
@@ -1530,10 +1544,18 @@ mainPage bsize model =
                                             "Notus pick a row"
 
                                     ColSelectedDecoration _ ->
-                                        "Zephyrus confirm or pick another column"
+                                        if model.isLocal then
+                                            "Zephyrus confirm or pick another column"
+
+                                        else
+                                            "Waiting for Notus to pick a row (you may pick another column)"
 
                                     RowSelectedDecoration _ ->
-                                        "Notus confirm or pick another row"
+                                        if model.isLocal then
+                                            "Notus confirm or pick another row"
+
+                                        else
+                                            "Waiting for Zephyrus to pick a column (you may pick another row)"
 
                                     AlreadyFilledDecoration _ ->
                                         case gameState.whoseTurn of
