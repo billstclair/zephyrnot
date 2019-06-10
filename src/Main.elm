@@ -76,7 +76,7 @@ import Html.Attributes as Attributes
         , value
         , width
         )
-import Html.Events exposing (on, onCheck, onClick, onInput)
+import Html.Events exposing (keyCode, on, onCheck, onClick, onInput)
 import Json.Decode as JD exposing (Decoder, Value)
 import Json.Encode as JE
 import Markdown
@@ -306,7 +306,7 @@ initialChatSettings =
         | attributes =
             { attributes
                 | chatTable =
-                    [ style "width" "80%" ]
+                    [ style "width" "90%" ]
                 , textColumn =
                     [ style "width" "100%" ]
                 , textArea =
@@ -763,6 +763,11 @@ socketHandler response state mdl =
 focusChatInput : Cmd Msg
 focusChatInput =
     Task.attempt (\_ -> Noop) (Dom.focus chatInputId)
+
+
+onKeydown : (Int -> msg) -> Attribute msg
+onKeydown tagger =
+    on "keydown" (JD.map tagger keyCode)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -1813,6 +1818,14 @@ mainPage bsize model =
                                 [ onInput SetGameid
                                 , value model.gameid
                                 , size 16
+                                , onKeydown
+                                    (\code ->
+                                        if code == 13 then
+                                            Join
+
+                                        else
+                                            Noop
+                                    )
                                 ]
                                 []
                             , text " "
