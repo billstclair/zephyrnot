@@ -136,6 +136,7 @@ import Zephyrnot.Types as Types
         , Page(..)
         , Player(..)
         , PlayerNames
+        , PublicType(..)
         , SavedModel
         , Score
         , Settings
@@ -365,7 +366,7 @@ init flags url key =
 type alias NewReqBody =
     { name : String
     , player : Player
-    , isPublic : Bool
+    , publicType : PublicType
     , restoreState : Maybe GameState
     }
 
@@ -374,7 +375,7 @@ initialNewReqBody : NewReqBody
 initialNewReqBody =
     { name = "Zephyrus"
     , player = Zephyrus
-    , isPublic = False
+    , publicType = NotPublic
     , restoreState = Nothing
     }
 
@@ -731,7 +732,7 @@ socketHandler response state mdl =
                                 NewReq
                                     { name = model.settings.name
                                     , player = model.chooseFirst
-                                    , isPublic = False
+                                    , publicType = NotPublic
                                     , restoreState = Nothing
                                     }
 

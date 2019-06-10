@@ -49,6 +49,7 @@ import Zephyrnot.Types as Types
         , PlayerNames
         , PrivateGameState
         , PublicGame
+        , PublicType(..)
         , SavedModel
         , Score
         , Settings
@@ -564,6 +565,40 @@ publicGameDecoder =
         |> required "forName" (JD.nullable JD.string)
 
 
+encodePublicType : PublicType -> Value
+encodePublicType publicType =
+    case publicType of
+        NotPublic ->
+            JE.string "NotPublic"
+
+        EntirelyPublic ->
+            JE.string "EntirelyPublic"
+
+        PublicFor name ->
+            JE.object [ ( "publicFor", JE.string name ) ]
+
+
+publicTypeDecoder : Decoder PublicType
+publicTypeDecoder =
+    JD.oneOf
+        [ JD.string
+            |> JD.andThen
+                (\s ->
+                    case s of
+                        "NotPublic" ->
+                            JD.succeed NotPublic
+
+                        "EntirelyPublic" ->
+                            JD.succeed EntirelyPublic
+
+                        _ ->
+                            JD.fail "Not a public type"
+                )
+        , JD.field "publicFor" JD.string
+            |> JD.andThen (PublicFor >> JD.succeed)
+        ]
+
+
 messageEncoder : Message -> ( ReqRsp, Plist )
 messageEncoder =
     messageEncoderInternal False
@@ -577,11 +612,11 @@ messageEncoderWithPrivate =
 messageEncoderInternal : Bool -> Message -> ( ReqRsp, Plist )
 messageEncoderInternal includePrivate message =
     case message of
-        NewReq { name, player, isPublic, restoreState } ->
+        NewReq { name, player, publicType, restoreState } ->
             ( Req "new"
             , [ ( "name", JE.string name )
               , ( "player", encodePlayer player )
-              , ( "isPublic", JE.bool isPublic )
+              , ( "publicType", encodePublicType publicType )
               , ( "restoreState"
                 , case restoreState of
                     Nothing ->
@@ -696,7 +731,7 @@ messageEncoderInternal includePrivate message =
             )
 
         PublicGamesReq { subscribe, forName } ->
-            ( Req "publicGame"
+            ( Req "publicGames"
             , [ ( "subscribe", JE.bool subscribe )
               , ( "forName"
                 , case forName of
@@ -710,13 +745,13 @@ messageEncoderInternal includePrivate message =
             )
 
         PublicGamesRsp { games } ->
-            ( Rsp "publicGame"
+            ( Rsp "publicGames"
             , [ ( "games", JE.list encodePublicGame games )
               ]
             )
 
         PublicGamesUpdateRsp { added, removed } ->
-            ( Rsp "publicGameUpdate"
+            ( Rsp "publicGamesUpdate"
             , List.concat
                 [ case added of
                     [] ->
@@ -759,17 +794,17 @@ messageEncoderInternal includePrivate message =
 newReqDecoder : Decoder Message
 newReqDecoder =
     JD.succeed
-        (\name player isPublic restoreState ->
+        (\name player publicType restoreState ->
             NewReq
                 { name = name
                 , player = player
-                , isPublic = isPublic
+                , publicType = publicType
                 , restoreState = restoreState
                 }
         )
         |> required "name" JD.string
         |> required "player" playerDecoder
-        |> required "isPublic" JD.bool
+        |> required "publicType" publicTypeDecoder
         |> required "restoreState" (JD.nullable gameStateDecoder)
 
 
@@ -967,8 +1002,8 @@ gameOverRspDecoder =
         |> required "gameState" gameStateDecoder
 
 
-publicGameReqDecoder : Decoder Message
-publicGameReqDecoder =
+publicGamesReqDecoder : Decoder Message
+publicGamesReqDecoder =
     JD.succeed
         (\subscribe forName ->
             PublicGamesReq
@@ -980,8 +1015,8 @@ publicGameReqDecoder =
         |> required "forName" (JD.nullable JD.string)
 
 
-publicGameRspDecoder : Decoder Message
-publicGameRspDecoder =
+publicGamesRspDecoder : Decoder Message
+publicGamesRspDecoder =
     JD.succeed
         (\games ->
             PublicGamesRsp { games = games }
@@ -989,8 +1024,8 @@ publicGameRspDecoder =
         |> required "games" (JD.list publicGameDecoder)
 
 
-publicGameUpdateRspDecoder : Decoder Message
-publicGameUpdateRspDecoder =
+publicGamesUpdateRspDecoder : Decoder Message
+publicGamesUpdateRspDecoder =
     JD.succeed
         (\added removed ->
             PublicGamesUpdateRsp
@@ -1053,8 +1088,8 @@ messageDecoder ( reqrsp, plist ) =
                 "play" ->
                     decodePlist playReqDecoder plist
 
-                "publicGame" ->
-                    decodePlist publicGameReqDecoder plist
+                "publicGames" ->
+                    decodePlist publicGamesReqDecoder plist
 
                 "chat" ->
                     decodePlist chatReqDecoder plist
@@ -1088,11 +1123,11 @@ messageDecoder ( reqrsp, plist ) =
                 "gameOver" ->
                     decodePlist gameOverRspDecoder plist
 
-                "publicGame" ->
-                    decodePlist publicGameRspDecoder plist
+                "publicGames" ->
+                    decodePlist publicGamesRspDecoder plist
 
-                "publicGameUpdate" ->
-                    decodePlist publicGameUpdateRspDecoder plist
+                "publicGamesUpdate" ->
+                    decodePlist publicGamesUpdateRspDecoder plist
 
                 "error" ->
                     decodePlist errorRspDecoder plist

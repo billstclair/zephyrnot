@@ -19,6 +19,7 @@ import Zephyrnot.Types as Types
         , Player(..)
         , PlayerNames
         , PublicGame
+        , PublicType(..)
         , Score
         , Winner(..)
         )
@@ -102,13 +103,19 @@ protocolData =
     [ NewReq
         { name = "Bill"
         , player = Zephyrus
-        , isPublic = True
+        , publicType = NotPublic
         , restoreState = Nothing
         }
     , NewReq
         { name = "Joe"
         , player = Notus
-        , isPublic = False
+        , publicType = EntirelyPublic
+        , restoreState = Just gameState1
+        }
+    , NewReq
+        { name = "Joe"
+        , player = Notus
+        , publicType = PublicFor "Bill"
         , restoreState = Just gameState1
         }
     , NewRsp

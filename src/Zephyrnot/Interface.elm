@@ -92,7 +92,7 @@ messageProcessor state message =
             ( state, Nothing )
     in
     case message of
-        NewReq { name, player, isPublic, restoreState } ->
+        NewReq { name, player, publicType, restoreState } ->
             if name == "" then
                 errorRes message state "Blank name not allowed."
 

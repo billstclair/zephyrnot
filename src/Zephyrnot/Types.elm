@@ -21,6 +21,7 @@ module Zephyrnot.Types exposing
     , PlayerNames
     , PrivateGameState
     , PublicGame
+    , PublicType(..)
     , SavedModel
     , Score
     , ServerState
@@ -164,11 +165,17 @@ type Choice
     | ChooseNew Player
 
 
+type PublicType
+    = NotPublic
+    | EntirelyPublic
+    | PublicFor String
+
+
 type Message
     = NewReq
         { name : String
         , player : Player
-        , isPublic : Bool
+        , publicType : PublicType
         , restoreState : Maybe GameState
         }
     | NewRsp
