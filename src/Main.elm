@@ -1663,13 +1663,6 @@ mainPage bsize model =
                      else
                         "bold"
                     )
-                , style "font-size"
-                    (if gameState.winner == NoWinner then
-                        "100%"
-
-                     else
-                        "120%"
-                    )
                 ]
                 [ text message ]
             , br
