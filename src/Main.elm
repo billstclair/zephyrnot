@@ -1632,12 +1632,7 @@ mainPage bsize model =
                     [ if model.isLive then
                         div [ align "center" ]
                             [ b "Game ID: "
-                            , input
-                                [ value model.gameid
-                                , size 16
-                                , disabled True
-                                ]
-                                []
+                            , text model.gameid
                             , br
                             , button
                                 [ onClick Disconnect ]
@@ -1654,15 +1649,18 @@ mainPage bsize model =
                                 ]
                                 []
                             , br
-                            , b "Server: "
-                            , input
-                                [ onInput SetServerUrl
-                                , value model.serverUrl
-                                , size 40
-                                , disabled True
-                                ]
-                                []
-                            , text " "
+
+                            {-
+                               , b "Server: "
+                               , input
+                                   [ onInput SetServerUrl
+                                   , value model.serverUrl
+                                   , size 40
+                                   , disabled True
+                                   ]
+                                   []
+                               , text " "
+                            -}
                             , button
                                 [ onClick StartGame
                                 , disabled <| settings.name == ""
