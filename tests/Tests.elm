@@ -63,6 +63,7 @@ all =
             [ testMap protocolTest protocolData
             , testMap boardTest boardData
             , testMap gameStateTest gameStateData
+            , testMap publicGameTest publicGameData
             ]
 
 
@@ -266,6 +267,29 @@ protocolData =
 expectString : String -> String -> Expectation
 expectString sb was =
     Expect.equal sb was
+
+
+publicGameTest : PublicGame -> String -> Test
+publicGameTest game name =
+    test ("publicGameTest \"" ++ name ++ "\"")
+        (\_ ->
+            let
+                frameworkGame =
+                    maybeLog "frameworkGame" <| ED.publicGameToFramework game
+            in
+            expectResult (Ok game) <|
+                (ED.frameworkToPublicGame frameworkGame
+                    |> Result.fromMaybe
+                        "bad conversion"
+                )
+        )
+
+
+publicGameData : List PublicGame
+publicGameData =
+    [ publicGame1
+    , publicGame2
+    ]
 
 
 boardTest : String -> String -> Test

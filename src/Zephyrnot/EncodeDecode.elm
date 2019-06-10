@@ -16,11 +16,13 @@ module Zephyrnot.EncodeDecode exposing
     , encodeGameState
     , encodeMoves
     , encodeSavedModel
+    , frameworkToPublicGame
     , gameStateDecoder
     , messageDecoder
     , messageEncoder
     , messageEncoderWithPrivate
     , movesDecoder
+    , publicGameToFramework
     , stringToBoard
     )
 
@@ -535,6 +537,16 @@ choiceDecoder =
         ]
 
 
+encodeMaybe : (a -> Value) -> Maybe a -> Value
+encodeMaybe encoder maybe =
+    case maybe of
+        Nothing ->
+            JE.null
+
+        Just a ->
+            encoder a
+
+
 encodePublicGame : PublicGame -> Value
 encodePublicGame game =
     let
@@ -545,14 +557,7 @@ encodePublicGame game =
         [ ( "gameid", JE.string gameid )
         , ( "creator", JE.string creator )
         , ( "player", encodePlayer player )
-        , ( "forName"
-          , case forName of
-                Nothing ->
-                    JE.null
-
-                Just name ->
-                    JE.string name
-          )
+        , ( "forName", encodeMaybe JE.string forName )
         ]
 
 
@@ -563,6 +568,40 @@ publicGameDecoder =
         |> required "creator" JD.string
         |> required "player" playerDecoder
         |> required "forName" (JD.nullable JD.string)
+
+
+publicGameToFramework : PublicGame -> WebSocketFramework.Types.PublicGame
+publicGameToFramework { gameid, creator, player, forName } =
+    { gameid = gameid
+    , playerName =
+        JE.object
+            [ ( "creator", JE.string creator )
+            , ( "player", encodePlayer player )
+            , ( "forName", encodeMaybe JE.string forName )
+            ]
+            |> JE.encode 0
+    }
+
+
+frameworkToPublicGame : WebSocketFramework.Types.PublicGame -> Maybe PublicGame
+frameworkToPublicGame { gameid, playerName } =
+    case
+        JD.decodeString
+            (JD.succeed
+                (\creator player forName ->
+                    PublicGame gameid creator player forName
+                )
+                |> required "creator" JD.string
+                |> required "player" playerDecoder
+                |> required "forName" (JD.nullable JD.string)
+            )
+            playerName
+    of
+        Ok game ->
+            Just game
+
+        Err _ ->
+            Nothing
 
 
 encodePublicType : PublicType -> Value
@@ -618,12 +657,7 @@ messageEncoderInternal includePrivate message =
               , ( "player", encodePlayer player )
               , ( "publicType", encodePublicType publicType )
               , ( "restoreState"
-                , case restoreState of
-                    Nothing ->
-                        JE.null
-
-                    Just state ->
-                        encodeGameState includePrivate state
+                , encodeMaybe (encodeGameState includePrivate) restoreState
                 )
               ]
             )
@@ -655,14 +689,7 @@ messageEncoderInternal includePrivate message =
         JoinRsp { gameid, playerid, player, gameState } ->
             ( Rsp "join"
             , [ ( "gameid", JE.string gameid )
-              , ( "playerid"
-                , case playerid of
-                    Nothing ->
-                        JE.null
-
-                    Just p ->
-                        JE.string p
-                )
+              , ( "playerid", encodeMaybe JE.string playerid )
               , ( "player", encodePlayer player )
               , ( "gameState", encodeGameState includePrivate gameState )
               ]
@@ -733,14 +760,7 @@ messageEncoderInternal includePrivate message =
         PublicGamesReq { subscribe, forName } ->
             ( Req "publicGames"
             , [ ( "subscribe", JE.bool subscribe )
-              , ( "forName"
-                , case forName of
-                    Nothing ->
-                        JE.null
-
-                    Just name ->
-                        JE.string name
-                )
+              , ( "forName", encodeMaybe JE.string forName )
               ]
             )
 
