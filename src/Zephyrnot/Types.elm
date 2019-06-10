@@ -20,6 +20,7 @@ module Zephyrnot.Types exposing
     , Player(..)
     , PlayerNames
     , PrivateGameState
+    , PublicGame
     , SavedModel
     , Score
     , ServerState
@@ -222,6 +223,16 @@ type Message
         { gameid : GameId
         , gameState : GameState
         }
+      -- Public chat
+    | PublicGamesReq
+        { subscribe : Bool
+        , forName : Maybe String
+        }
+    | PublicGamesRsp { games : List PublicGame }
+    | PublicGamesUpdateRsp
+        { added : List PublicGame
+        , removed : List String
+        }
       -- Errors
     | ErrorRsp
         { request : String
@@ -237,6 +248,14 @@ type Message
         , name : String
         , text : String
         }
+
+
+type alias PublicGame =
+    { gameid : GameId
+    , creator : String
+    , player : Player
+    , forName : Maybe String
+    }
 
 
 messageToPlayer : Message -> Maybe Player

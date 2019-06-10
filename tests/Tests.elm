@@ -18,6 +18,7 @@ import Zephyrnot.Types as Types
         , Message(..)
         , Player(..)
         , PlayerNames
+        , PublicGame
         , Score
         , Winner(..)
         )
@@ -219,6 +220,26 @@ protocolData =
         { gameid = "80"
         , gameState = { gameState2 | winner = NotusWinner }
         }
+    , PublicGamesReq
+        { subscribe = False
+        , forName = Nothing
+        }
+    , PublicGamesReq
+        { subscribe = True
+        , forName = Just "Bill"
+        }
+    , PublicGamesRsp
+        { games = [] }
+    , PublicGamesRsp
+        { games = [ publicGame1, publicGame2 ] }
+    , PublicGamesUpdateRsp
+        { added = [ publicGame1, publicGame2 ]
+        , removed = []
+        }
+    , PublicGamesUpdateRsp
+        { added = []
+        , removed = [ "foo", "bar" ]
+        }
     , ErrorRsp
         { request = "request"
         , text = "text"
@@ -374,3 +395,21 @@ gameStateData =
     , gameState2
     , gameState3
     ]
+
+
+publicGame1 : PublicGame
+publicGame1 =
+    { gameid = "foo"
+    , creator = "Bill"
+    , player = Zephyrus
+    , forName = Nothing
+    }
+
+
+publicGame2 : PublicGame
+publicGame2 =
+    { gameid = "bar"
+    , creator = "Chris"
+    , player = Notus
+    , forName = Just "Bill"
+    }

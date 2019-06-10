@@ -48,6 +48,7 @@ import Zephyrnot.Types as Types
         , Player(..)
         , PlayerNames
         , PrivateGameState
+        , PublicGame
         , SavedModel
         , Score
         , Settings
@@ -533,6 +534,36 @@ choiceDecoder =
         ]
 
 
+encodePublicGame : PublicGame -> Value
+encodePublicGame game =
+    let
+        { gameid, creator, player, forName } =
+            game
+    in
+    JE.object
+        [ ( "gameid", JE.string gameid )
+        , ( "creator", JE.string creator )
+        , ( "player", encodePlayer player )
+        , ( "forName"
+          , case forName of
+                Nothing ->
+                    JE.null
+
+                Just name ->
+                    JE.string name
+          )
+        ]
+
+
+publicGameDecoder : Decoder PublicGame
+publicGameDecoder =
+    JD.succeed PublicGame
+        |> required "gameid" JD.string
+        |> required "creator" JD.string
+        |> required "player" playerDecoder
+        |> required "forName" (JD.nullable JD.string)
+
+
 messageEncoder : Message -> ( ReqRsp, Plist )
 messageEncoder =
     messageEncoderInternal False
@@ -662,6 +693,44 @@ messageEncoderInternal includePrivate message =
             , [ ( "gameid", JE.string gameid )
               , ( "gameState", encodeGameState includePrivate gameState )
               ]
+            )
+
+        PublicGamesReq { subscribe, forName } ->
+            ( Req "publicGame"
+            , [ ( "subscribe", JE.bool subscribe )
+              , ( "forName"
+                , case forName of
+                    Nothing ->
+                        JE.null
+
+                    Just name ->
+                        JE.string name
+                )
+              ]
+            )
+
+        PublicGamesRsp { games } ->
+            ( Rsp "publicGame"
+            , [ ( "games", JE.list encodePublicGame games )
+              ]
+            )
+
+        PublicGamesUpdateRsp { added, removed } ->
+            ( Rsp "publicGameUpdate"
+            , List.concat
+                [ case added of
+                    [] ->
+                        []
+
+                    games ->
+                        [ ( "added", JE.list encodePublicGame games ) ]
+                , case removed of
+                    [] ->
+                        []
+
+                    gameids ->
+                        [ ( "removed", JE.list JE.string gameids ) ]
+                ]
             )
 
         ErrorRsp { request, text } ->
@@ -898,6 +967,41 @@ gameOverRspDecoder =
         |> required "gameState" gameStateDecoder
 
 
+publicGameReqDecoder : Decoder Message
+publicGameReqDecoder =
+    JD.succeed
+        (\subscribe forName ->
+            PublicGamesReq
+                { subscribe = subscribe
+                , forName = forName
+                }
+        )
+        |> required "subscribe" JD.bool
+        |> required "forName" (JD.nullable JD.string)
+
+
+publicGameRspDecoder : Decoder Message
+publicGameRspDecoder =
+    JD.succeed
+        (\games ->
+            PublicGamesRsp { games = games }
+        )
+        |> required "games" (JD.list publicGameDecoder)
+
+
+publicGameUpdateRspDecoder : Decoder Message
+publicGameUpdateRspDecoder =
+    JD.succeed
+        (\added removed ->
+            PublicGamesUpdateRsp
+                { added = added
+                , removed = removed
+                }
+        )
+        |> optional "added" (JD.list publicGameDecoder) []
+        |> optional "removed" (JD.list JD.string) []
+
+
 errorRspDecoder : Decoder Message
 errorRspDecoder =
     JD.succeed
@@ -949,6 +1053,9 @@ messageDecoder ( reqrsp, plist ) =
                 "play" ->
                     decodePlist playReqDecoder plist
 
+                "publicGame" ->
+                    decodePlist publicGameReqDecoder plist
+
                 "chat" ->
                     decodePlist chatReqDecoder plist
 
@@ -980,6 +1087,12 @@ messageDecoder ( reqrsp, plist ) =
 
                 "gameOver" ->
                     decodePlist gameOverRspDecoder plist
+
+                "publicGame" ->
+                    decodePlist publicGameRspDecoder plist
+
+                "publicGameUpdate" ->
+                    decodePlist publicGameUpdateRspDecoder plist
 
                 "error" ->
                     decodePlist errorRspDecoder plist
