@@ -1509,23 +1509,28 @@ mainPage bsize model =
         { zephyrus, notus } =
             gameState.players
 
-        message =
+        ( playing, message ) =
             if not model.isLive then
-                "Enter \"Your Name\" and either click \"Start Game\" or enter \"Game ID\" and click \"Join\""
+                ( False
+                , "Enter \"Your Name\" and either click \"Start Game\" or enter \"Game ID\" and click \"Join\""
+                )
 
             else if zephyrus == "" || notus == "" then
-                let
+                ( False
+                , let
                     waitingFor =
                         if zephyrus == "" then
                             "Zephyrus"
 
                         else
                             "Notus"
-                in
-                "Waiting for " ++ waitingFor ++ " to join"
+                  in
+                  "Waiting for " ++ waitingFor ++ " to join"
+                )
 
             else
-                case gameState.winner of
+                ( True
+                , case gameState.winner of
                     ZephyrusWinner ->
                         "Zephyrus won in " ++ String.fromInt count ++ "!"
 
@@ -1628,6 +1633,7 @@ mainPage bsize model =
                             AlreadyFilledDecoration _ ->
                                 -- Can't happen
                                 ""
+                )
     in
     div [ align "center" ]
         [ Board.render bsize
@@ -1650,7 +1656,7 @@ mainPage bsize model =
                         ]
             , span
                 [ style "color"
-                    (if gameState.winner == NoWinner then
+                    (if not playing || gameState.winner == NoWinner then
                         "green"
 
                      else
