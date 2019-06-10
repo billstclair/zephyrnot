@@ -19,6 +19,7 @@ import Browser.Navigation as Navigation exposing (Key)
 import Char
 import Cmd.Extra exposing (withCmd, withCmds, withNoCmd)
 import Dict exposing (Dict)
+import ElmChat exposing (LineSpec(..), defaultExtraAttributes)
 import FormatNumber exposing (format)
 import FormatNumber.Locales exposing (usLocale)
 import Html
@@ -106,7 +107,7 @@ import Svg.Attributes
 import Svg.Button as SB exposing (Button, Content(..))
 import Svg.Events
 import Task
-import Time exposing (Posix)
+import Time exposing (Posix, Zone)
 import Url exposing (Url)
 import WebSocketFramework
 import WebSocketFramework.EncodeDecode as WSFED
@@ -170,6 +171,10 @@ type ConnectionReason
     | JoinGameConnection
 
 
+type alias ChatSettings =
+    ElmChat.Settings Msg
+
+
 type alias Model =
     { serverUrl : String
     , interface : ServerInterface
@@ -182,6 +187,8 @@ type alias Model =
     , simulatorState : SimulatorState --for the "Aux"  page
     , seed : Seed
     , error : Maybe String
+    , chatSettings : ChatSettings
+    , time : Posix
 
     -- persistent below here
     , page : Page
@@ -225,6 +232,10 @@ type Msg
     | Disconnect
     | ClearStorage
     | Click ( Int, Int )
+    | ChatUpdate ChatSettings (Cmd Msg)
+    | ChatSend String ChatSettings
+    | DelayedAction (Model -> ( Model, Cmd Msg )) Posix
+    | SetZone Zone
     | SetGameCount String
     | ToggleSimulator
     | SimulatorStep
@@ -282,6 +293,30 @@ proxyServer =
     ServerInterface.makeProxyServer fullProcessor IncomingMessage
 
 
+initialChatSettings : ElmChat.CustomSettings () Msg
+initialChatSettings =
+    let
+        settings =
+            ElmChat.makeSettings "id1" 14 True ChatUpdate
+
+        attributes =
+            settings.attributes
+    in
+    { settings
+        | attributes =
+            { attributes
+                | chatTable =
+                    [ style "width" "80%" ]
+                , textColumn =
+                    [ style "width" "100%" ]
+                , textArea =
+                    [ style "width" "100%"
+                    , style "height" "6em"
+                    ]
+            }
+    }
+
+
 init : Value -> url -> Key -> ( Model, Cmd Msg )
 init flags url key =
     let
@@ -302,6 +337,8 @@ init flags url key =
                 }
             , seed = Random.initialSeed 0 --get time for this
             , error = Nothing
+            , chatSettings = initialChatSettings
+            , time = Time.millisToPosix 0
 
             -- persistent fields
             , page = MainPage
@@ -321,6 +358,7 @@ init flags url key =
         |> withCmds
             [ Task.perform getViewport Dom.getViewport
             , Task.perform InitializeSeed Time.now
+            , Task.perform SetZone Time.here
             ]
 
 
@@ -393,7 +431,8 @@ storageHandler response state model =
                                         mdl2 =
                                             savedModelToModel savedModel mdl
                                     in
-                                    mdl2
+                                    -- eventually, try to reconnect here.
+                                    { mdl2 | gameid = "" }
                                         |> withCmds
                                             [ cmd
                                             , if mdl2.isLocal then
@@ -480,6 +519,9 @@ incomingMessage interface message mdl =
 
         JoinRsp { gameid, playerid, player, gameState } ->
             let
+                chatSettings =
+                    model.chatSettings
+
                 model2 =
                     { model
                         | gameState = gameState
@@ -492,6 +534,11 @@ incomingMessage interface message mdl =
 
                             else
                                 player
+                        , chatSettings =
+                            { chatSettings
+                                | lines = []
+                                , input = ""
+                            }
                     }
 
                 model3 =
@@ -629,8 +676,16 @@ incomingMessage interface message mdl =
                     )
 
         ChatRsp { gameid, name, text } ->
-            -- No chat yet
-            model |> withNoCmd
+            let
+                ( chatSettings, cmd ) =
+                    ElmChat.addLineSpec model.chatSettings <|
+                        ElmChat.makeLineSpec text
+                            (Just name)
+                            --(Just model.time)
+                            Nothing
+            in
+            { model | chatSettings = chatSettings }
+                |> withCmd cmd
 
         _ ->
             model |> withNoCmd
@@ -705,11 +760,22 @@ socketHandler response state mdl =
             model |> withNoCmd
 
 
+focusChatInput : Cmd Msg
+focusChatInput =
+    Task.attempt (\_ -> Noop) (Dom.focus chatInputId)
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let
         ( mdl, cmd ) =
             updateInternal msg model
+
+        { zephyrus, notus } =
+            mdl.gameState.players
+
+        focus =
+            not mdl.isLocal && mdl.isLive && zephyrus /= "" && notus /= ""
 
         doSave =
             case msg of
@@ -725,12 +791,26 @@ update msg model =
                 ClearStorage ->
                     False
 
+                ChatUpdate _ _ ->
+                    False
+
+                ChatSend _ _ ->
+                    False
+
+                DelayedAction _ _ ->
+                    False
+
                 _ ->
                     True
     in
     mdl
         |> withCmds
             [ cmd
+            , if focus then
+                focusChatInput
+
+              else
+                Cmd.none
             , if model.started && doSave then
                 putModel mdl
 
@@ -909,6 +989,24 @@ updateInternal msg model =
             else
                 doClick row col model
 
+        ChatUpdate chatSettings cmd ->
+            { model | chatSettings = chatSettings }
+                |> withCmd cmd
+
+        ChatSend line chatSettings ->
+            chatSend line chatSettings model
+
+        DelayedAction updater time ->
+            updater { model | time = time }
+
+        SetZone zone ->
+            let
+                chatSettings =
+                    model.chatSettings
+            in
+            { model | chatSettings = { chatSettings | zone = zone } }
+                |> withNoCmd
+
         SetGameCount string ->
             let
                 simulatorState =
@@ -1055,6 +1153,29 @@ updateInternal msg model =
 
                 Ok res ->
                     res
+
+
+chatSend : String -> ChatSettings -> Model -> ( Model, Cmd Msg )
+chatSend line chatSettings model =
+    model
+        |> withCmd (delayedAction <| chatSendInternal line chatSettings)
+
+
+chatSendInternal : String -> ChatSettings -> Model -> ( Model, Cmd Msg )
+chatSendInternal line chatSettings model =
+    { model | chatSettings = chatSettings }
+        |> withCmd
+            (send model <|
+                ChatReq
+                    { playerid = model.playerid
+                    , text = line
+                    }
+            )
+
+
+delayedAction : (Model -> ( Model, Cmd Msg )) -> Cmd Msg
+delayedAction updater =
+    Task.perform (DelayedAction updater) Time.now
 
 
 makeWebSocketServer : Model -> ServerInterface
@@ -1285,7 +1406,7 @@ boardSize model =
         ( w, h ) =
             model.windowSize
     in
-    min (90 * w) (70 * h) // 100
+    min (90 * w) (65 * h) // 100
 
 
 herculanumStyle : Attribute msg
@@ -1344,6 +1465,11 @@ view model =
                 ]
         ]
     }
+
+
+chatInputId : String
+chatInputId =
+    "chatInput"
 
 
 mainPage : Int -> Model -> Html Msg
@@ -1483,9 +1609,10 @@ mainPage bsize model =
             model.decoration
             gameState.path
             gameState.board
-        , p
+        , span
             []
-            [ case model.error of
+            [ br
+            , case model.error of
                 Nothing ->
                     text ""
 
@@ -1536,7 +1663,21 @@ mainPage bsize model =
                     ]
             , if not model.isLocal && model.isLive then
                 span []
-                    [ b "Zephyrus: "
+                    [ if zephyrus == "" || notus == "" then
+                        text ""
+
+                      else
+                        span []
+                            [ ElmChat.styledInputBox [ id chatInputId ]
+                                []
+                                0
+                                "Send"
+                                ChatSend
+                                model.chatSettings
+                            , ElmChat.chat model.chatSettings
+                            , br
+                            ]
+                    , b "Zephyrus: "
                     , text <|
                         case zephyrus of
                             "" ->
