@@ -786,7 +786,7 @@ socketHandler response state mdl =
                             send model <|
                                 PublicGamesReq
                                     { subscribe = model.page == PublicPage
-                                    , forName = Just model.settings.name
+                                    , forName = model.settings.name
                                     , gameid = Just model.gameid
                                     }
                     )
@@ -2442,7 +2442,7 @@ renderPublicGameRow myGameid name playing { gameid, creator, player, forName } =
               else
                 input
                     [ type_ "checkbox"
-                    , checked <| Interface.forNameMatches (Just name) forName
+                    , checked <| Interface.forNameMatches name forName
                     ]
                     []
             ]
