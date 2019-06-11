@@ -1,5 +1,6 @@
 port module Zephyrnot.Server.Server exposing (main)
 
+import Set exposing (Set)
 import WebSocketFramework.Server
     exposing
         ( Msg
@@ -26,6 +27,7 @@ import Zephyrnot.Types as Types
         , GameState
         , Message(..)
         , Player
+        , PlayerNames
         )
 
 
@@ -87,26 +89,69 @@ encodeDecode =
 messageSender : ServerMessageSender ServerModel Message GameState Player
 messageSender model socket state request response =
     let
-        sender =
+        ( sender, state2 ) =
             case request of
-                NewReq _ ->
-                    sendToOne
-
                 UpdateReq _ ->
-                    sendToOne
+                    ( sendToOne, state )
+
+                PublicGamesReq { subscribe } ->
+                    let
+                        state3 =
+                            handlePublicGamesSubscription subscribe
+                                socket
+                                state
+                    in
+                    ( sendToOne, state3 )
 
                 _ ->
                     case response of
+                        NewRsp _ ->
+                            sendNewRsp model response state
+
                         JoinRsp _ ->
-                            sendJoinRsp model
+                            sendJoinRsp model response state
 
                         PlayRsp _ ->
-                            sendPlayRsp model
+                            ( sendPlayRsp model, state )
 
                         _ ->
-                            sendToAll model
+                            ( sendToAll model, state )
     in
     ( model, sender response socket )
+
+
+handlePublicGamesSubscription : Bool -> Socket -> ServerState -> ServerState
+handlePublicGamesSubscription subscribe socket state =
+    let
+        gs =
+            case state.state of
+                Nothing ->
+                    Interface.emptyGameState <| PlayerNames "" ""
+
+                Just gameState ->
+                    gameState
+
+        private =
+            gs.private
+    in
+    { state
+        | state =
+            Just
+                { gs
+                    | private =
+                        { private
+                            | subscribers =
+                                (if subscribe then
+                                    Set.insert
+
+                                 else
+                                    Set.remove
+                                )
+                                    socket
+                                    private.subscribers
+                        }
+                }
+    }
 
 
 sendToOne : Message -> Socket -> Cmd Msg
@@ -141,19 +186,29 @@ sendToOthers model response socket =
                 response
 
 
-sendJoinRsp : Model -> Message -> Socket -> Cmd Msg
-sendJoinRsp model response socket =
+sendNewRsp : Model -> Message -> ServerState -> ( Message -> Socket -> Cmd Msg, ServerState )
+sendNewRsp model response state =
+    -- Need to add public game here, if it is.
+    -- Also, need to send new game to subscribers.
+    ( \_ socket -> sendToOne response socket, state )
+
+
+sendJoinRsp : Model -> Message -> ServerState -> ( Message -> Socket -> Cmd Msg, ServerState )
+sendJoinRsp model response state =
     case response of
         JoinRsp record ->
-            Cmd.batch
-                [ sendToOne response socket
-                , sendToOthers (Debug.log "sendJoinRsp toOthers" model)
-                    (JoinRsp { record | playerid = Nothing })
-                    socket
-                ]
+            ( \_ socket ->
+                Cmd.batch
+                    [ sendToOne response socket
+                    , sendToOthers model
+                        (JoinRsp { record | playerid = Nothing })
+                        socket
+                    ]
+            , state
+            )
 
         _ ->
-            sendToAll model response socket
+            ( \_ socket -> sendToAll model response socket, state )
 
 
 sendPlayRsp : Model -> Message -> Socket -> Cmd Msg

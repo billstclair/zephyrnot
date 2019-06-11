@@ -1769,7 +1769,9 @@ mainPage bsize model =
                         span []
                             [ ElmChat.styledInputBox [ id ids.chatInput ]
                                 []
-                                30
+                                --width in chars
+                                40
+                                --id
                                 "Send"
                                 ChatSend
                                 model.chatSettings
@@ -2128,7 +2130,9 @@ Fill in "Your Name", change the "Server", if you're using something
 other than the default, and either click "Start Game" or fill in the
 "Game ID" and click "Join". If you "Start Game", the "Game ID" will be
 filled in, and you'll need to give this to the other player, so they
-can "Join" (public games will come soon).
+can "Join".
+
+To create a public game, which will appear on the "Public" page, check the "Public" checkbox. If you fill in "for name", then only players with that name will be able to see that game. Otherwise, anyone who goes to the public games page will be able to join your game.
 
 After both players are connected, on each turn, Zephyrus clicks a
 column and Notus clicks a row. Instructions continue at "Both Local
@@ -2165,8 +2169,18 @@ unoccupied.
 Play continues until there is a path connecting two opposite
 edges. Click the "New Game" button to play again.
 
+Click the "Resign" button to let the Wookie win. Click the
+"Disconnect" button to stop playing, leaving the other player in the
+lurch.
+
 Click the "Clear" button at the bottom of the page to remove all stored
 state from your browser, and restart with an empty board.
+
+The "Public" games page lists all public games known to the server,
+except those that were registered for another name than "Your
+Name". Click on an underlined GameId to join that game. The "Creator"
+column shows the name of the player who started the game. The "Player"
+column shows which player he will be. You will be the other player.
 
 The "Aux" page has a "Hide Title" checkbox, which, if checked, hides
 the title at the top of the page, making more fit in your browser
@@ -2368,7 +2382,13 @@ publicPage bsize model =
         , rulesDiv True
             [ br, b "Public Games" ]
         , p [ align "center" ]
-            [ table [ class "prettytable" ] <|
+            [ if isPlaying model then
+                p [ style "color" "red" ]
+                    [ text "You're playing a game. What are you doing here?" ]
+
+              else
+                text ""
+            , table [ class "prettytable" ] <|
                 List.concat
                     [ [ tr []
                             [ th "GameId"
@@ -2407,7 +2427,13 @@ renderPublicGameRow myGameid name playing { gameid, creator, player, forName } =
                     ]
                     [ text gameid ]
             ]
-        , td [ center ] [ text creator ]
+        , td [ center ]
+            [ if gameid == myGameid then
+                text <| "You (" ++ creator ++ ")"
+
+              else
+                text creator
+            ]
         , td [ center ] [ text <| playerString player ]
         , td [ center ]
             [ if myGameid == gameid then

@@ -175,7 +175,7 @@ messageProcessor state message =
                                         state5.publicGames
                             }
                 in
-                ( Debug.log "JoinRsp" state6
+                ( state6
                 , Just <|
                     NewRsp
                         { gameid = gameid
