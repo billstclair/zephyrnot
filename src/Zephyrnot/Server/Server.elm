@@ -92,13 +92,24 @@ encodeDecode =
 messageSender : ServerMessageSender ServerModel Message GameState Player
 messageSender model socket state request response =
     let
-        state2 =
+        ( state2, cmd ) =
             case request of
                 PublicGamesReq { subscribe, forName } ->
-                    handlePublicGamesSubscription subscribe forName socket state
+                    ( handlePublicGamesSubscription subscribe forName socket state
+                    , Cmd.none
+                    )
 
                 _ ->
-                    state
+                    case response of
+                        LeaveRsp { gameid } ->
+                            let
+                                ( model2, cmd2 ) =
+                                    gamesDeleter model [ gameid ] state
+                            in
+                            ( WebSocketFramework.Server.getState model2, cmd2 )
+
+                        _ ->
+                            ( state, Cmd.none )
 
         sender =
             case request of
@@ -110,11 +121,25 @@ messageSender model socket state request response =
 
                 _ ->
                     case response of
-                        NewRsp _ ->
-                            sendNewRsp model state
+                        NewRsp { gameid } ->
+                            let
+                                sockets =
+                                    Debug.log "NewRsp sockets" <|
+                                        WebSocketFramework.Server.otherSockets gameid
+                                            ""
+                                            model
+                            in
+                            sendNewRsp (Debug.log "sendNewRsp" model) state
 
-                        JoinRsp _ ->
-                            sendJoinRsp model state
+                        JoinRsp { gameid } ->
+                            let
+                                sockets =
+                                    Debug.log "JoinRsp sockets" <|
+                                        WebSocketFramework.Server.otherSockets gameid
+                                            ""
+                                            model
+                            in
+                            sendJoinRsp (Debug.log "  model" model) state
 
                         PlayRsp _ ->
                             sendPlayRsp model
@@ -123,7 +148,7 @@ messageSender model socket state request response =
                             sendToAll model
     in
     ( WebSocketFramework.Server.setState model state2
-    , sender response socket
+    , Cmd.batch [ cmd, sender response socket ]
     )
 
 
@@ -211,18 +236,17 @@ sendNewRsp model state response socket =
                             else
                                 let
                                     publicGame =
-                                        Debug.log "publicGame" <|
-                                            { gameid = gameid
-                                            , creator = name
-                                            , player = player
-                                            , forName =
-                                                case publicType of
-                                                    PublicFor for ->
-                                                        Just for
+                                        { gameid = gameid
+                                        , creator = name
+                                        , player = player
+                                        , forName =
+                                            case publicType of
+                                                PublicFor for ->
+                                                    Just for
 
-                                                    _ ->
-                                                        Nothing
-                                            }
+                                                _ ->
+                                                    Nothing
+                                        }
 
                                     notification =
                                         sendToOne
@@ -263,7 +287,7 @@ removedGameNotifications : GameId -> ServerState -> Cmd Msg
 removedGameNotifications gameid state =
     case state.state of
         Nothing ->
-            Debug.log ("No subscriptions for gameid: " ++ gameid) Cmd.none
+            Cmd.none
 
         Just gs ->
             let
@@ -278,7 +302,7 @@ removedGameNotifications gameid state =
                 |> Set.toList
                 |> List.map
                     (\( sock, _ ) ->
-                        notification (Debug.log ("Remove gameid: " ++ gameid ++ " from") sock)
+                        notification sock
                     )
                 |> Cmd.batch
 
@@ -340,12 +364,6 @@ gamesDeleter : Model -> List GameId -> ServerState -> ( Model, Cmd Msg )
 gamesDeleter model gameids state =
     case state.state of
         Nothing ->
-            let
-                gid =
-                    Debug.log
-                        "No subscriptions while removing gameids"
-                        gameids
-            in
             ( model, Cmd.none )
 
         Just gs ->

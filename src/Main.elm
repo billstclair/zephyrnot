@@ -598,8 +598,9 @@ incomingMessage interface message mdl =
             else
                 { model2 | isLive = False }
                     |> withCmd
-                        (WebSocket.makeClose model.serverUrl
-                            |> webSocketSend
+                        (Cmd.none
+                         --WebSocket.makeClose model.serverUrl
+                         --|> webSocketSend
                         )
 
         UpdateRsp { gameid, gameState } ->
@@ -686,18 +687,24 @@ incomingMessage interface message mdl =
                     { model
                         | error = Just text
                         , connectionReason = NoConnection
+                        , page =
+                            if model.page == PublicPage then
+                                MainPage
+
+                            else
+                                model.page
+                        , publicGames = []
                     }
             in
             model2
                 |> withCmd
                     (if
                         not model2.isLocal
-                            && (Debug.log "connectionReason" model.connectionReason
-                                    /= NoConnection
-                               )
+                            && (model.connectionReason /= NoConnection)
                      then
-                        WebSocket.makeClose model2.serverUrl
-                            |> webSocketSend
+                        Cmd.none
+                        --WebSocket.makeClose model2.serverUrl
+                        --  |> webSocketSend
 
                      else
                         Cmd.none
