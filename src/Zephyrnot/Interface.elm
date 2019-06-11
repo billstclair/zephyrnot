@@ -36,6 +36,7 @@ import Zephyrnot.Types as Types
         , Message(..)
         , Player(..)
         , PlayerNames
+        , PublicType(..)
         , Score
         , ServerState
         , Winner(..)
@@ -134,14 +135,44 @@ messageProcessor state message =
 
                     state5 =
                         ServerInterface.addPlayer playerid playerInfo state4
+
+                    forName =
+                        case publicType of
+                            PublicFor fn ->
+                                Just fn
+
+                            _ ->
+                                Nothing
+
+                    state6 =
+                        if publicType == NotPublic then
+                            state5
+
+                        else
+                            let
+                                publicGame =
+                                    { gameid = gameid
+                                    , creator = name
+                                    , player = player
+                                    , forName = forName
+                                    }
+                                        |> ED.publicGameToFramework
+                            in
+                            { state5
+                                | publicGames =
+                                    ServerInterface.appendPublicGames
+                                        publicGame
+                                        state5.publicGames
+                            }
                 in
-                ( state5
+                ( state6
                 , Just <|
                     NewRsp
                         { gameid = gameid
                         , playerid = playerid
                         , player = player
                         , name = name
+                        , publicType = publicType
                         , gameState = gameState
                         }
                 )
@@ -352,6 +383,20 @@ messageProcessor state message =
                                                 AlreadyFilledDecoration ( row, col )
                                 in
                                 doPlay decoration gameid gameState state
+
+        PublicGamesReq { subscribe, forName } ->
+            -- subscribe is processed by the server code only
+            let
+                games =
+                    state.publicGames
+                        |> List.filterMap ED.frameworkToPublicGame
+                        |> List.filter
+                            (\game ->
+                                (game.forName == Nothing)
+                                    || (game.forName == forName)
+                            )
+            in
+            ( state, Just <| PublicGamesRsp { games = games } )
 
         ChatReq { playerid, text } ->
             case lookupGame message playerid state of

@@ -30,6 +30,7 @@ import Array exposing (Array)
 import Json.Decode as JD exposing (Decoder)
 import Json.Decode.Pipeline as DP exposing (optional, required)
 import Json.Encode as JE exposing (Value)
+import Set exposing (Set)
 import WebSocketFramework exposing (decodePlist, unknownMessage)
 import WebSocketFramework.Types
     exposing
@@ -442,29 +443,36 @@ playerNamesDecoder =
 
 
 encodePrivateGameState : PrivateGameState -> Value
-encodePrivateGameState { decoration } =
-    case decoration of
-        NoDecoration ->
-            JE.null
+encodePrivateGameState { decoration, subscribers } =
+    List.concat
+        [ case decoration of
+            NoDecoration ->
+                []
 
-        _ ->
-            JE.object [ ( "decoration", encodeDecoration decoration ) ]
+            _ ->
+                [ ( "decoration", encodeDecoration decoration ) ]
+        , case Set.toList subscribers of
+            [] ->
+                []
+
+            list ->
+                [ ( "subscribers", JE.list JE.string list ) ]
+        ]
+        |> JE.object
+
+
+stringSetDecoder : Decoder (Set String)
+stringSetDecoder =
+    JD.list JD.string
+        |> JD.andThen
+            (Set.fromList >> JD.succeed)
 
 
 privateGameStateDecoder : Decoder PrivateGameState
 privateGameStateDecoder =
-    JD.oneOf
-        [ JD.map PrivateGameState <| JD.field "decoration" decorationDecoder
-        , JD.value
-            |> JD.andThen
-                (\value ->
-                    if value == JE.null then
-                        JD.succeed Types.emptyPrivateGameState
-
-                    else
-                        JD.fail "Bad PrivateGameState"
-                )
-        ]
+    JD.succeed PrivateGameState
+        |> optional "decoration" decorationDecoder NoDecoration
+        |> optional "subscribers" stringSetDecoder Set.empty
 
 
 encodeGameState : Bool -> GameState -> Value
@@ -585,23 +593,17 @@ publicGameToFramework { gameid, creator, player, forName } =
 
 frameworkToPublicGame : WebSocketFramework.Types.PublicGame -> Maybe PublicGame
 frameworkToPublicGame { gameid, playerName } =
-    case
-        JD.decodeString
-            (JD.succeed
-                (\creator player forName ->
-                    PublicGame gameid creator player forName
-                )
-                |> required "creator" JD.string
-                |> required "player" playerDecoder
-                |> required "forName" (JD.nullable JD.string)
+    JD.decodeString
+        (JD.succeed
+            (\creator player forName ->
+                PublicGame gameid creator player forName
             )
-            playerName
-    of
-        Ok game ->
-            Just game
-
-        Err _ ->
-            Nothing
+            |> required "creator" JD.string
+            |> required "player" playerDecoder
+            |> required "forName" (JD.nullable JD.string)
+        )
+        playerName
+        |> Result.toMaybe
 
 
 encodePublicType : PublicType -> Value
@@ -662,12 +664,13 @@ messageEncoderInternal includePrivate message =
               ]
             )
 
-        NewRsp { gameid, playerid, player, name, gameState } ->
+        NewRsp { gameid, playerid, player, name, publicType, gameState } ->
             ( Rsp "new"
             , [ ( "gameid", JE.string gameid )
               , ( "playerid", JE.string playerid )
               , ( "player", encodePlayer player )
               , ( "name", JE.string name )
+              , ( "publicType", encodePublicType publicType )
               , ( "gameState", encodeGameState includePrivate gameState )
               ]
             )
@@ -905,12 +908,13 @@ chatReqDecoder =
 newRspDecoder : Decoder Message
 newRspDecoder =
     JD.succeed
-        (\gameid playerid player name gameState ->
+        (\gameid playerid player name publicType gameState ->
             NewRsp
                 { gameid = gameid
                 , playerid = playerid
                 , player = player
                 , name = name
+                , publicType = publicType
                 , gameState = gameState
                 }
         )
@@ -918,6 +922,7 @@ newRspDecoder =
         |> required "playerid" JD.string
         |> required "player" playerDecoder
         |> required "name" JD.string
+        |> required "publicType" publicTypeDecoder
         |> required "gameState" gameStateDecoder
 
 

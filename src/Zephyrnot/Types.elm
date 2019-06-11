@@ -26,6 +26,7 @@ module Zephyrnot.Types exposing
     , Score
     , ServerState
     , Settings
+    , Socket
     , Winner(..)
     , emptyPrivateGameState
     , emptySettings
@@ -37,6 +38,7 @@ module Zephyrnot.Types exposing
     )
 
 import Array exposing (Array)
+import Set exposing (Set)
 import WebSocketFramework.Types
     exposing
         ( GameId
@@ -130,14 +132,19 @@ type alias SavedModel =
 ---
 
 
+type alias Socket =
+    String
+
+
 type alias PrivateGameState =
     { decoration : Decoration
+    , subscribers : Set Socket
     }
 
 
 emptyPrivateGameState : PrivateGameState
 emptyPrivateGameState =
-    PrivateGameState NoDecoration
+    PrivateGameState NoDecoration Set.empty
 
 
 type alias GameState =
@@ -183,6 +190,7 @@ type Message
         , playerid : PlayerId
         , player : Player
         , name : String
+        , publicType : PublicType
         , gameState : GameState
         }
     | JoinReq
@@ -230,7 +238,7 @@ type Message
         { gameid : GameId
         , gameState : GameState
         }
-      -- Public chat
+      -- Public games
     | PublicGamesReq
         { subscribe : Bool
         , forName : Maybe String

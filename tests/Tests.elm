@@ -6,6 +6,7 @@ import Json.Decode as JD exposing (Decoder)
 import Json.Encode as JE exposing (Value)
 import List
 import Maybe exposing (withDefault)
+import Set exposing (Set)
 import Test exposing (..)
 import Zephyrnot.Board as Board
 import Zephyrnot.EncodeDecode as ED
@@ -18,6 +19,7 @@ import Zephyrnot.Types as Types
         , Message(..)
         , Player(..)
         , PlayerNames
+        , PrivateGameState
         , PublicGame
         , PublicType(..)
         , Score
@@ -124,6 +126,7 @@ protocolData =
         , playerid = "76"
         , player = Zephyrus
         , name = "Joe"
+        , publicType = NotPublic
         , gameState = gameState1
         }
     , NewRsp
@@ -131,6 +134,15 @@ protocolData =
         , playerid = "76b"
         , player = Notus
         , name = "Joel"
+        , publicType = EntirelyPublic
+        , gameState = gameState2
+        }
+    , NewRsp
+        { gameid = "123a"
+        , playerid = "76b"
+        , player = Notus
+        , name = "Joel"
+        , publicType = PublicFor "Bill"
         , gameState = gameState2
         }
     , JoinReq
@@ -279,8 +291,7 @@ publicGameTest game name =
             in
             expectResult (Ok game) <|
                 (ED.frameworkToPublicGame frameworkGame
-                    |> Result.fromMaybe
-                        "bad conversion"
+                    |> Result.fromMaybe "bad conversion"
                 )
         )
 
@@ -380,6 +391,26 @@ score2 =
     Score 4 5 6 7
 
 
+privateGameState1 =
+    PrivateGameState
+        (RowSelectedDecoration 0)
+        Set.empty
+
+
+privateGameState2 =
+    PrivateGameState
+        (ColSelectedDecoration 2)
+        (Set.fromList [ "1", "2", "3" ])
+
+
+privateGameState3 =
+    PrivateGameState NoDecoration Set.empty
+
+
+privateGameState4 =
+    PrivateGameState (AlreadyFilledDecoration ( 0, 2 )) Set.empty
+
+
 gameState1 =
     { board = board1
     , moves = [ "a1", "b2", "c3" ]
@@ -388,7 +419,7 @@ gameState1 =
     , score = score1
     , winner = NoWinner
     , path = []
-    , private = { decoration = RowSelectedDecoration 0 }
+    , private = privateGameState1
     }
 
 
@@ -400,7 +431,7 @@ gameState2 =
     , score = score1
     , winner = ZephyrusWinner
     , path = [ ( 1, 2 ), ( 2, 3 ) ]
-    , private = { decoration = ColSelectedDecoration 2 }
+    , private = privateGameState2
     }
 
 
@@ -412,12 +443,12 @@ gameState3 =
     , score = score2
     , winner = NotusWinner
     , path = [ ( 1, 2 ), ( 2, 3 ) ]
-    , private = { decoration = NoDecoration }
+    , private = privateGameState3
     }
 
 
 gameState4 =
-    { gameState3 | private = { decoration = AlreadyFilledDecoration ( 0, 2 ) } }
+    { gameState3 | private = privateGameState4 }
 
 
 gameStateData : List GameState
