@@ -143,7 +143,7 @@ type alias Socket =
 
 type alias PrivateGameState =
     { decoration : Decoration
-    , subscribers : Set Socket
+    , subscribers : Set ( Socket, String )
     }
 
 
@@ -246,7 +246,7 @@ type Message
       -- Public games
     | PublicGamesReq
         { subscribe : Bool
-        , forName : Maybe String
+        , forName : String
         , gameid : Maybe GameId
         }
     | PublicGamesRsp { games : List PublicGame }

@@ -56,6 +56,7 @@ import Zephyrnot.Types as Types
         , SavedModel
         , Score
         , Settings
+        , Socket
         , Winner(..)
         )
 
@@ -466,23 +467,46 @@ encodePrivateGameState { decoration, subscribers } =
                 []
 
             list ->
-                [ ( "subscribers", JE.list JE.string list ) ]
+                [ ( "subscribers", JE.list encodeSubscriberPair list ) ]
         ]
         |> JE.object
 
 
-stringSetDecoder : Decoder (Set String)
-stringSetDecoder =
+encodeSubscriberPair : ( Socket, String ) -> Value
+encodeSubscriberPair ( socket, forName ) =
+    JE.list identity [ JE.string socket, JE.string forName ]
+
+
+subscriberPairDecoder : Decoder ( Socket, String )
+subscriberPairDecoder =
     JD.list JD.string
         |> JD.andThen
-            (Set.fromList >> JD.succeed)
+            (\list ->
+                case list of
+                    [ socket, forName ] ->
+                        JD.succeed ( socket, forName )
+
+                    _ ->
+                        JD.fail "Not a two-element list"
+            )
+
+
+subscribersListDecoder : Decoder (List ( String, String ))
+subscribersListDecoder =
+    JD.list subscriberPairDecoder
+
+
+subscribersDecoder : Decoder (Set ( String, String ))
+subscribersDecoder =
+    subscribersListDecoder
+        |> JD.andThen (Set.fromList >> JD.succeed)
 
 
 privateGameStateDecoder : Decoder PrivateGameState
 privateGameStateDecoder =
     JD.succeed PrivateGameState
         |> optional "decoration" decorationDecoder NoDecoration
-        |> optional "subscribers" stringSetDecoder Set.empty
+        |> optional "subscribers" subscribersDecoder Set.empty
 
 
 encodeGameState : Bool -> GameState -> Value
@@ -773,7 +797,7 @@ messageEncoderInternal includePrivate message =
         PublicGamesReq { subscribe, forName, gameid } ->
             ( Req "publicGames"
             , [ ( "subscribe", JE.bool subscribe )
-              , ( "forName", encodeMaybe JE.string forName )
+              , ( "forName", JE.string forName )
               , ( "gameid", encodeMaybe JE.string gameid )
               ]
             )
@@ -1049,7 +1073,7 @@ publicGamesReqDecoder =
                 }
         )
         |> required "subscribe" JD.bool
-        |> required "forName" (JD.nullable JD.string)
+        |> required "forName" JD.string
         |> required "gameid" (JD.nullable JD.string)
 
 

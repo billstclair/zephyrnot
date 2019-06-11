@@ -71,9 +71,9 @@ errorRes message state text =
     )
 
 
-forNameMatches : Maybe String -> Maybe String -> Bool
+forNameMatches : String -> Maybe String -> Bool
 forNameMatches name1 name2 =
-    (Maybe.withDefault "" name1 |> String.toLower)
+    (name1 |> String.toLower)
         == (Maybe.withDefault "" name2 |> String.toLower)
 
 

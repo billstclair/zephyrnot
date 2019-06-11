@@ -94,10 +94,11 @@ messageSender model socket state request response =
                 UpdateReq _ ->
                     ( sendToOne, state )
 
-                PublicGamesReq { subscribe } ->
+                PublicGamesReq { subscribe, forName } ->
                     let
                         state3 =
                             handlePublicGamesSubscription subscribe
+                                forName
                                 socket
                                 state
                     in
@@ -120,8 +121,8 @@ messageSender model socket state request response =
     ( model, sender response socket )
 
 
-handlePublicGamesSubscription : Bool -> Socket -> ServerState -> ServerState
-handlePublicGamesSubscription subscribe socket state =
+handlePublicGamesSubscription : Bool -> String -> Socket -> ServerState -> ServerState
+handlePublicGamesSubscription subscribe forName socket state =
     let
         gs =
             case state.state of
@@ -133,6 +134,9 @@ handlePublicGamesSubscription subscribe socket state =
 
         private =
             gs.private
+
+        subscribers =
+            Set.filter (\( sock, _ ) -> socket /= sock) private.subscribers
     in
     { state
         | state =
@@ -141,14 +145,11 @@ handlePublicGamesSubscription subscribe socket state =
                     | private =
                         { private
                             | subscribers =
-                                (if subscribe then
-                                    Set.insert
+                                if subscribe then
+                                    Set.insert ( socket, forName ) subscribers
 
-                                 else
-                                    Set.remove
-                                )
-                                    socket
-                                    private.subscribers
+                                else
+                                    subscribers
                         }
                 }
     }
@@ -188,13 +189,13 @@ sendToOthers model response socket =
 
 sendNewRsp : Model -> Message -> ServerState -> ( Message -> Socket -> Cmd Msg, ServerState )
 sendNewRsp model response state =
-    -- Need to add public game here, if it is.
-    -- Also, need to send new game to subscribers.
+    -- Need to send new public game to subscribers.
     ( \_ socket -> sendToOne response socket, state )
 
 
 sendJoinRsp : Model -> Message -> ServerState -> ( Message -> Socket -> Cmd Msg, ServerState )
 sendJoinRsp model response state =
+    -- Need to send deleted public game to subscribers
     case response of
         JoinRsp record ->
             ( \_ socket ->
