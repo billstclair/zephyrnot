@@ -10,6 +10,7 @@ import WebSocketFramework.Server
         , program
         , verbose
         )
+import WebSocketFramework.ServerInterface as ServerInterface
 import WebSocketFramework.Types
     exposing
         ( EncodeDecode
@@ -28,6 +29,8 @@ import Zephyrnot.Types as Types
         , Message(..)
         , Player
         , PlayerNames
+        , PublicType(..)
+        , SubscriptionSet
         )
 
 
@@ -89,36 +92,39 @@ encodeDecode =
 messageSender : ServerMessageSender ServerModel Message GameState Player
 messageSender model socket state request response =
     let
-        ( sender, state2 ) =
+        state2 =
+            case request of
+                PublicGamesReq { subscribe, forName } ->
+                    handlePublicGamesSubscription subscribe forName socket state
+
+                _ ->
+                    state
+
+        sender =
             case request of
                 UpdateReq _ ->
-                    ( sendToOne, state )
+                    sendToOne
 
                 PublicGamesReq { subscribe, forName } ->
-                    let
-                        state3 =
-                            handlePublicGamesSubscription subscribe
-                                forName
-                                socket
-                                state
-                    in
-                    ( sendToOne, state3 )
+                    sendToOne
 
                 _ ->
                     case response of
                         NewRsp _ ->
-                            sendNewRsp model response state
+                            sendNewRsp model state
 
                         JoinRsp _ ->
-                            sendJoinRsp model response state
+                            sendJoinRsp model state
 
                         PlayRsp _ ->
-                            ( sendPlayRsp model, state )
+                            sendPlayRsp model
 
                         _ ->
-                            ( sendToAll model, state )
+                            sendToAll model
     in
-    ( model, sender response socket )
+    ( WebSocketFramework.Server.setState model state2
+    , sender response socket
+    )
 
 
 handlePublicGamesSubscription : Bool -> String -> Socket -> ServerState -> ServerState
@@ -187,29 +193,121 @@ sendToOthers model response socket =
                 response
 
 
-sendNewRsp : Model -> Message -> ServerState -> ( Message -> Socket -> Cmd Msg, ServerState )
-sendNewRsp model response state =
+sendNewRsp : Model -> ServerState -> Message -> Socket -> Cmd Msg
+sendNewRsp model state response socket =
     -- Need to send new public game to subscribers.
-    ( \_ socket -> sendToOne response socket, state )
+    let
+        notifications =
+            case state.state of
+                Nothing ->
+                    []
+
+                Just gs ->
+                    case response of
+                        NewRsp { gameid, player, name, publicType } ->
+                            if publicType == NotPublic then
+                                []
+
+                            else
+                                let
+                                    publicGame =
+                                        Debug.log "publicGame" <|
+                                            { gameid = gameid
+                                            , creator = name
+                                            , player = player
+                                            , forName =
+                                                case publicType of
+                                                    PublicFor for ->
+                                                        Just for
+
+                                                    _ ->
+                                                        Nothing
+                                            }
+
+                                    notification =
+                                        sendToOne
+                                            (PublicGamesUpdateRsp
+                                                { added = [ publicGame ]
+                                                , removed = []
+                                                }
+                                            )
+                                in
+                                gs.private.subscribers
+                                    |> Set.toList
+                                    |> List.filterMap
+                                        (\( sock, forName ) ->
+                                            case publicType of
+                                                EntirelyPublic ->
+                                                    Just <| notification sock
+
+                                                PublicFor for ->
+                                                    if forName == for then
+                                                        Just <| notification sock
+
+                                                    else
+                                                        Nothing
+
+                                                _ ->
+                                                    Nothing
+                                        )
+
+                        _ ->
+                            []
+    in
+    Cmd.batch <|
+        sendToOne response socket
+            :: notifications
 
 
-sendJoinRsp : Model -> Message -> ServerState -> ( Message -> Socket -> Cmd Msg, ServerState )
-sendJoinRsp model response state =
-    -- Need to send deleted public game to subscribers
-    case response of
+removedGameNotifications : GameId -> ServerState -> Cmd Msg
+removedGameNotifications gameid state =
+    case state.state of
+        Nothing ->
+            Debug.log ("No subscriptions for gameid: " ++ gameid) Cmd.none
+
+        Just gs ->
+            let
+                notification =
+                    sendToOne <|
+                        PublicGamesUpdateRsp
+                            { added = []
+                            , removed = [ gameid ]
+                            }
+            in
+            gs.private.subscribers
+                |> Set.toList
+                |> List.map
+                    (\( sock, _ ) ->
+                        notification (Debug.log ("Remove gameid: " ++ gameid ++ " from") sock)
+                    )
+                |> Cmd.batch
+
+
+sendJoinRsp : Model -> ServerState -> Message -> Socket -> Cmd Msg
+sendJoinRsp model state response socket =
+    let
+        notifications =
+            case response of
+                JoinRsp { gameid } ->
+                    removedGameNotifications gameid state
+
+                _ ->
+                    Cmd.none
+    in
+    [ notifications
+    , case response of
         JoinRsp record ->
-            ( \_ socket ->
-                Cmd.batch
-                    [ sendToOne response socket
-                    , sendToOthers model
-                        (JoinRsp { record | playerid = Nothing })
-                        socket
-                    ]
-            , state
-            )
+            [ sendToOne response socket
+            , sendToOthers model
+                (JoinRsp { record | playerid = Nothing })
+                socket
+            ]
+                |> Cmd.batch
 
         _ ->
-            ( \_ socket -> sendToAll model response socket, state )
+            sendToAll model response socket
+    ]
+        |> Cmd.batch
 
 
 sendPlayRsp : Model -> Message -> Socket -> Cmd Msg
@@ -238,6 +336,66 @@ sendPlayRsp model response socket =
             sendToAll model response socket
 
 
+gamesDeleter : Model -> List GameId -> ServerState -> ( Model, Cmd Msg )
+gamesDeleter model gameids state =
+    case state.state of
+        Nothing ->
+            let
+                gid =
+                    Debug.log
+                        "No subscriptions while removing gameids"
+                        gameids
+            in
+            ( model, Cmd.none )
+
+        Just gs ->
+            let
+                private =
+                    gs.private
+
+                subscribers =
+                    private.subscribers
+
+                loop : GameId -> ( SubscriptionSet, Cmd Msg ) -> ( SubscriptionSet, Cmd Msg )
+                loop gameid ( subscribers2, notifications ) =
+                    let
+                        inner : Socket -> ( SubscriptionSet, Cmd Msg ) -> ( SubscriptionSet, Cmd Msg )
+                        inner socket ( subscribers3, notifications2 ) =
+                            ( Set.filter (\( sock, _ ) -> sock /= socket)
+                                subscribers3
+                            , [ removedGameNotifications gameid state
+                              , notifications2
+                              ]
+                                |> Cmd.batch
+                            )
+
+                        sockets =
+                            WebSocketFramework.Server.otherSockets gameid
+                                ""
+                                model
+                    in
+                    List.foldl inner ( subscribers2, notifications ) sockets
+
+                ( subscribers4, notifications3 ) =
+                    List.foldl loop ( subscribers, Cmd.none ) gameids
+
+                state2 =
+                    { state
+                        | state =
+                            Just
+                                { gs
+                                    | private =
+                                        { private
+                                            | subscribers = subscribers4
+                                        }
+                                }
+                    }
+            in
+            ( WebSocketFramework.Server.setState model state2
+            , notifications3
+            )
+
+
 userFunctions : UserFunctions ServerModel Message GameState Player
 userFunctions =
     { encodeDecode = encodeDecode
@@ -246,7 +404,7 @@ userFunctions =
     , messageToGameid = Just Types.messageToGameid
     , messageToPlayerid = Just Types.messageToPlayerid
     , autoDeleteGame = Nothing
-    , gamesDeleter = Nothing
+    , gamesDeleter = Just gamesDeleter
     , playersDeleter = Nothing
     , inputPort = inputPort
     , outputPort = outputPort

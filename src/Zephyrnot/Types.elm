@@ -27,6 +27,7 @@ module Zephyrnot.Types exposing
     , ServerState
     , Settings
     , Socket
+    , SubscriptionSet
     , Winner(..)
     , emptyPrivateGameState
     , emptySettings
@@ -141,9 +142,13 @@ type alias Socket =
     String
 
 
+type alias SubscriptionSet =
+    Set ( Socket, String )
+
+
 type alias PrivateGameState =
     { decoration : Decoration
-    , subscribers : Set ( Socket, String )
+    , subscribers : SubscriptionSet
     }
 
 

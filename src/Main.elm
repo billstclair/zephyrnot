@@ -670,6 +670,16 @@ incomingMessage interface message mdl =
             { model | publicGames = games }
                 |> withNoCmd
 
+        PublicGamesUpdateRsp { added, removed } ->
+            let
+                games =
+                    List.filter
+                        (\{ gameid } -> not <| List.member gameid removed)
+                        model.publicGames
+            in
+            { model | publicGames = List.concat [ games, added ] }
+                |> withNoCmd
+
         ErrorRsp { request, text } ->
             let
                 model2 =
