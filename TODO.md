@@ -3,23 +3,13 @@
 1. Persistence
 
    * Reopening page in browser should return to where it left.
+     Persist chat.
+     Persist playerid and send UpdateReq at startup.
 
-2. Hot seat version. Playable single-phone game.  
-
-   * Click on row (column) to select.
-   * Click on another row (column) to change selection.
-   * Click again to confirm.
-   * Hand phone to other player.
-   * Click on column (row) to select.
-   * Click on another column (row) to change selection.
-   * Click again to confirm.
-   * New node is selected, or old node is highlighted for change.
-
-3. Placement mode checkbox
+2. Placement mode checkbox
 
    * One click to select a node.
 
-3. Convert instructions PDF to game pages:
+3. GameState JSON text for copy/restore
 
-   * Rules
-   * Mechanics of play
+4. Public game subscriptions processed in Zephyrnot.Server.Server

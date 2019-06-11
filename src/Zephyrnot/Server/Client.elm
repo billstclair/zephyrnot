@@ -34,6 +34,7 @@ import Zephyrnot.Types as Types
         , Message(..)
         , Player(..)
         , PlayerNames
+        , PublicType(..)
         , Winner(..)
         )
 
@@ -296,7 +297,7 @@ newReq =
     NewReq
         { name = "Bill"
         , player = Zephyrus
-        , isPublic = False
+        , publicType = NotPublic
         , restoreState = Nothing
         }
 

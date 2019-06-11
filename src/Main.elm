@@ -136,6 +136,7 @@ import Zephyrnot.Types as Types
         , Page(..)
         , Player(..)
         , PlayerNames
+        , PublicGame
         , PublicType(..)
         , SavedModel
         , Score
@@ -170,6 +171,7 @@ type ConnectionReason
     = NoConnection
     | StartGameConnection
     | JoinGameConnection
+    | PublicGamesConnection
 
 
 type alias ChatSettings =
@@ -189,6 +191,7 @@ type alias Model =
     , seed : Seed
     , error : Maybe String
     , chatSettings : ChatSettings
+    , publicGames : List PublicGame
     , time : Posix
 
     -- persistent below here
@@ -222,6 +225,8 @@ type Msg
     | SetChooseFirst Player
     | SetIsLocal Bool
     | SetName String
+    | SetIsPublic Bool
+    | SetForName String
     | SetServerUrl String
     | SetGameid String
     | SetPage Page
@@ -230,6 +235,7 @@ type Msg
     | NewGame
     | StartGame
     | Join
+    | JoinGame GameId
     | Disconnect
     | ClearStorage
     | Click ( Int, Int )
@@ -339,6 +345,7 @@ init flags url key =
             , seed = Random.initialSeed 0 --get time for this
             , error = Nothing
             , chatSettings = initialChatSettings
+            , publicGames = []
             , time = Time.millisToPosix 0
 
             -- persistent fields
@@ -347,7 +354,7 @@ init flags url key =
             , firstSelection = NoDecoration
             , chooseFirst = Zephyrus
             , player = Zephyrus
-            , gameState = Debug.log "init" <| Interface.emptyGameState (PlayerNames "" "")
+            , gameState = Interface.emptyGameState (PlayerNames "" "")
             , isLocal = False
             , gameid = ""
             , playerid = ""
@@ -431,11 +438,16 @@ storageHandler response state model =
                                     let
                                         mdl2 =
                                             savedModelToModel savedModel mdl
+
+                                        ( mdl3, cmd2 ) =
+                                            { mdl2 | gameid = "" }
+                                                |> webSocketConnect PublicGamesConnection
                                     in
                                     -- eventually, try to reconnect here.
-                                    { mdl2 | gameid = "" }
+                                    { mdl3 | gameid = "" }
                                         |> withCmds
                                             [ cmd
+                                            , cmd2
                                             , if mdl2.isLocal then
                                                 send mdl2 <|
                                                     NewReq
@@ -525,7 +537,8 @@ incomingMessage interface message mdl =
 
                 model2 =
                     { model
-                        | gameState = gameState
+                        | page = MainPage
+                        , gameState = gameState
                         , isLive = True
                         , connectionReason = NoConnection
                         , decoration = gameState.private.decoration
@@ -543,7 +556,7 @@ incomingMessage interface message mdl =
                     }
 
                 model3 =
-                    if model.isLocal then
+                    if model2.isLocal then
                         { model2
                             | otherPlayerid =
                                 case playerid of
@@ -653,6 +666,10 @@ incomingMessage interface message mdl =
             }
                 |> withNoCmd
 
+        PublicGamesRsp { games } ->
+            { model | publicGames = games }
+                |> withNoCmd
+
         ErrorRsp { request, text } ->
             let
                 model2 =
@@ -700,8 +717,16 @@ socketHandler response state mdl =
     in
     case response of
         ErrorResponse error ->
-            { model | error = Just <| WebSocket.errorToString error }
-                |> withNoCmd
+            case error of
+                WebSocket.SocketAlreadyOpenError _ ->
+                    socketHandler
+                        (ConnectedResponse { key = "", description = "" })
+                        state
+                        model
+
+                _ ->
+                    { model | error = Just <| WebSocket.errorToString error }
+                        |> withNoCmd
 
         WebSocket.MessageReceivedResponse received ->
             let
@@ -728,11 +753,25 @@ socketHandler response state mdl =
                             Cmd.none
 
                         StartGameConnection ->
+                            let
+                                settings =
+                                    model.settings
+                            in
                             send model <|
                                 NewReq
                                     { name = model.settings.name
                                     , player = model.chooseFirst
-                                    , publicType = NotPublic
+                                    , publicType =
+                                        if not settings.isPublic then
+                                            NotPublic
+
+                                        else
+                                            case settings.forName of
+                                                "" ->
+                                                    EntirelyPublic
+
+                                                forName ->
+                                                    PublicFor forName
                                     , restoreState = Nothing
                                     }
 
@@ -741,6 +780,14 @@ socketHandler response state mdl =
                                 JoinReq
                                     { gameid = model.gameid
                                     , name = model.settings.name
+                                    }
+
+                        PublicGamesConnection ->
+                            send model <|
+                                PublicGamesReq
+                                    { subscribe = model.page == PublicPage
+                                    , forName = Just model.settings.name
+                                    , gameid = Just model.gameid
                                     }
                     )
 
@@ -761,9 +808,9 @@ socketHandler response state mdl =
             model |> withNoCmd
 
 
-focusChatInput : Cmd Msg
-focusChatInput =
-    Task.attempt (\_ -> Noop) (Dom.focus chatInputId)
+focusId : String -> Cmd Msg
+focusId id =
+    Task.attempt (\_ -> Noop) (Dom.focus id)
 
 
 onKeydown : (Int -> msg) -> Attribute msg
@@ -813,7 +860,7 @@ update msg model =
         |> withCmds
             [ cmd
             , if focus then
-                focusChatInput
+                focusId ids.chatInput
 
               else
                 Cmd.none
@@ -884,6 +931,20 @@ updateInternal msg model =
             { model | settings = { settings | name = name } }
                 |> withNoCmd
 
+        SetIsPublic isPublic ->
+            { model | settings = { settings | isPublic = isPublic } }
+                |> withCmd
+                    (if isPublic && not settings.isPublic then
+                        focusId ids.forName
+
+                     else
+                        Cmd.none
+                    )
+
+        SetForName forName ->
+            { model | settings = { settings | forName = forName } }
+                |> withNoCmd
+
         SetServerUrl serverUrl ->
             { model | serverUrl = serverUrl }
                 |> withNoCmd
@@ -893,8 +954,12 @@ updateInternal msg model =
                 |> withNoCmd
 
         SetPage page ->
+            let
+                getGames =
+                    page == PublicPage || model.page == PublicPage
+            in
             { model | page = page }
-                |> withNoCmd
+                |> webSocketConnect PublicGamesConnection
 
         SetHideTitle hideTitle ->
             { model | settings = { settings | hideTitle = hideTitle } }
@@ -990,6 +1055,9 @@ updateInternal msg model =
 
         Join ->
             join model
+
+        JoinGame gameid ->
+            join { model | gameid = gameid }
 
         Disconnect ->
             disconnect model
@@ -1482,14 +1550,18 @@ view model =
 
                     AuxPage ->
                         auxPage bsize model
+
+                    PublicPage ->
+                        publicPage bsize model
                 ]
         ]
     }
 
 
-chatInputId : String
-chatInputId =
-    "chatInput"
+ids =
+    { chatInput = "chatInput"
+    , forName = "forName"
+    }
 
 
 mainPage : Int -> Model -> Html Msg
@@ -1695,9 +1767,9 @@ mainPage bsize model =
 
                       else
                         span []
-                            [ ElmChat.styledInputBox [ id chatInputId ]
+                            [ ElmChat.styledInputBox [ id ids.chatInput ]
                                 []
-                                0
+                                30
                                 "Send"
                                 ChatSend
                                 model.chatSettings
@@ -1829,6 +1901,28 @@ mainPage bsize model =
                                    []
                                , text " "
                             -}
+                            , b "Public: "
+                            , input
+                                [ type_ "checkbox"
+                                , checked settings.isPublic
+                                , onCheck SetIsPublic
+                                ]
+                                []
+                            , if not settings.isPublic then
+                                text ""
+
+                              else
+                                span []
+                                    [ b " for name: "
+                                    , input
+                                        [ onInput SetForName
+                                        , value settings.forName
+                                        , size 20
+                                        , id ids.forName
+                                        ]
+                                        []
+                                    ]
+                            , text " "
                             , button
                                 [ onClick StartGame
                                 , disabled <| settings.name == ""
@@ -1869,15 +1963,21 @@ mainPage bsize model =
         , p []
             [ a
                 [ href "#"
-                , onClick <| SetPage InstructionsPage
+                , onClick <| SetPage PublicPage
                 ]
-                [ text "Instructions" ]
+                [ text "Public" ]
             , text " "
             , a
                 [ href "#"
                 , onClick <| SetPage AuxPage
                 ]
                 [ text "Aux" ]
+            , text " "
+            , a
+                [ href "#"
+                , onClick <| SetPage InstructionsPage
+                ]
+                [ text "Instructions" ]
             , text " "
             , a
                 [ href "#"
@@ -2249,6 +2349,88 @@ auxPage bsize model =
                     ]
             ]
         ]
+
+
+th : String -> Html Msg
+th string =
+    Html.th [] [ text string ]
+
+
+publicPage : Int -> Model -> Html Msg
+publicPage bsize model =
+    let
+        settings =
+            model.settings
+    in
+    rulesDiv False
+        [ br
+        , playButton
+        , rulesDiv True
+            [ br, b "Public Games" ]
+        , p [ align "center" ]
+            [ table [ class "prettytable" ] <|
+                List.concat
+                    [ [ tr []
+                            [ th "GameId"
+                            , th "Creator"
+                            , th "Player"
+                            , th "For you"
+                            ]
+                      ]
+                    , List.map
+                        (renderPublicGameRow model.gameid
+                            settings.name
+                            (isPlaying model)
+                        )
+                        model.publicGames
+                    ]
+            ]
+        , playButton
+        ]
+
+
+renderPublicGameRow : String -> String -> Bool -> PublicGame -> Html Msg
+renderPublicGameRow myGameid name playing { gameid, creator, player, forName } =
+    let
+        center =
+            style "text-align" "center"
+    in
+    tr []
+        [ td [ center ]
+            [ if gameid == myGameid || playing then
+                text gameid
+
+              else
+                a
+                    [ href "#"
+                    , onClick <| JoinGame gameid
+                    ]
+                    [ text gameid ]
+            ]
+        , td [ center ] [ text creator ]
+        , td [ center ] [ text <| playerString player ]
+        , td [ center ]
+            [ if myGameid == gameid then
+                text <| Maybe.withDefault "" forName
+
+              else
+                input
+                    [ type_ "checkbox"
+                    , checked <| Interface.forNameMatches (Just name) forName
+                    ]
+                    []
+            ]
+        ]
+
+
+playerString : Player -> String
+playerString player =
+    case player of
+        Zephyrus ->
+            "Zephyrus"
+
+        Notus ->
+            "Notus"
 
 
 b : String -> Html msg

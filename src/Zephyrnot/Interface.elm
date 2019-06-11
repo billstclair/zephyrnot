@@ -11,7 +11,11 @@
 ----------------------------------------------------------------------
 
 
-module Zephyrnot.Interface exposing (emptyGameState, messageProcessor)
+module Zephyrnot.Interface exposing
+    ( emptyGameState
+    , forNameMatches
+    , messageProcessor
+    )
 
 import Debug
 import WebSocketFramework exposing (decodePlist, unknownMessage)
@@ -65,6 +69,12 @@ errorRes message state text =
             , text = text
             }
     )
+
+
+forNameMatches : Maybe String -> Maybe String -> Bool
+forNameMatches name1 name2 =
+    (Maybe.withDefault "" name1 |> String.toLower)
+        == (Maybe.withDefault "" name2 |> String.toLower)
 
 
 lookupGame : Message -> PlayerId -> ServerState -> Result ( ServerState, Maybe Message ) ( GameId, GameState, Player )
@@ -165,7 +175,7 @@ messageProcessor state message =
                                         state5.publicGames
                             }
                 in
-                ( state6
+                ( Debug.log "JoinRsp" state6
                 , Just <|
                     NewRsp
                         { gameid = gameid
@@ -225,7 +235,12 @@ messageProcessor state message =
                                     gameState2
                                     state3
                         in
-                        ( state4
+                        ( { state4
+                            | publicGames =
+                                ServerInterface.removePublicGame
+                                    gameid
+                                    state4.publicGames
+                          }
                         , Just <|
                             JoinRsp
                                 { gameid = gameid
@@ -384,16 +399,37 @@ messageProcessor state message =
                                 in
                                 doPlay decoration gameid gameState state
 
-        PublicGamesReq { subscribe, forName } ->
+        PublicGamesReq { subscribe, forName, gameid } ->
             -- subscribe is processed by the server code only
             let
                 games =
-                    state.publicGames
+                    Debug.log "publicGames" state.publicGames
                         |> List.filterMap ED.frameworkToPublicGame
-                        |> List.filter
+                        |> List.filterMap
                             (\game ->
-                                (game.forName == Nothing)
-                                    || (game.forName == forName)
+                                let
+                                    matches =
+                                        forNameMatches forName game.forName
+                                            || (Maybe.withDefault "" gameid
+                                                    == game.gameid
+                                               )
+
+                                    include =
+                                        matches || game.forName == Nothing
+                                in
+                                if include then
+                                    Just
+                                        { game
+                                            | forName =
+                                                if matches then
+                                                    game.forName
+
+                                                else
+                                                    Nothing
+                                        }
+
+                                else
+                                    Nothing
                             )
             in
             ( state, Just <| PublicGamesRsp { games = games } )

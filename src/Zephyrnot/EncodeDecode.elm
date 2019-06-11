@@ -132,6 +132,9 @@ encodePage page =
             AuxPage ->
                 "AuxPage"
 
+            PublicPage ->
+                "PublicPage"
+
 
 pageDecoder : Decoder Page
 pageDecoder =
@@ -150,6 +153,9 @@ pageDecoder =
 
                     "AuxPage" ->
                         JD.succeed AuxPage
+
+                    "PublicPage" ->
+                        JD.succeed PublicPage
 
                     _ ->
                         JD.fail <| "Unknown page: " ++ s
@@ -407,9 +413,11 @@ scoreDecoder =
 
 
 encodeSettings : Settings -> Value
-encodeSettings { name, hideTitle } =
+encodeSettings { name, isPublic, forName, hideTitle } =
     JE.object
         [ ( "name", JE.string name )
+        , ( "isPublic", JE.bool isPublic )
+        , ( "forName", JE.string forName )
         , ( "hideTitle", JE.bool hideTitle )
         ]
 
@@ -418,6 +426,8 @@ settingsDecoder : Decoder Settings
 settingsDecoder =
     JD.succeed Settings
         |> required "name" JD.string
+        |> optional "isPublic" JD.bool False
+        |> optional "forName" JD.string ""
         |> required "hideTitle" JD.bool
 
 
@@ -760,10 +770,11 @@ messageEncoderInternal includePrivate message =
               ]
             )
 
-        PublicGamesReq { subscribe, forName } ->
+        PublicGamesReq { subscribe, forName, gameid } ->
             ( Req "publicGames"
             , [ ( "subscribe", JE.bool subscribe )
               , ( "forName", encodeMaybe JE.string forName )
+              , ( "gameid", encodeMaybe JE.string gameid )
               ]
             )
 
@@ -1030,14 +1041,16 @@ gameOverRspDecoder =
 publicGamesReqDecoder : Decoder Message
 publicGamesReqDecoder =
     JD.succeed
-        (\subscribe forName ->
+        (\subscribe forName gameid ->
             PublicGamesReq
                 { subscribe = subscribe
                 , forName = forName
+                , gameid = gameid
                 }
         )
         |> required "subscribe" JD.bool
         |> required "forName" (JD.nullable JD.string)
+        |> required "gameid" (JD.nullable JD.string)
 
 
 publicGamesRspDecoder : Decoder Message

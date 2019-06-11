@@ -243,10 +243,12 @@ protocolData =
     , PublicGamesReq
         { subscribe = False
         , forName = Nothing
+        , gameid = Nothing
         }
     , PublicGamesReq
         { subscribe = True
         , forName = Just "Bill"
+        , gameid = Just "80"
         }
     , PublicGamesRsp
         { games = [] }

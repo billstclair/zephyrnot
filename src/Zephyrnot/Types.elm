@@ -83,6 +83,7 @@ type Page
     | RulesPage
     | InstructionsPage
     | AuxPage
+    | PublicPage
 
 
 type alias Score =
@@ -100,6 +101,8 @@ zeroScore =
 
 type alias Settings =
     { name : String
+    , isPublic : Bool
+    , forName : String
     , hideTitle : Bool
     }
 
@@ -107,6 +110,8 @@ type alias Settings =
 emptySettings : Settings
 emptySettings =
     { name = ""
+    , isPublic = False
+    , forName = ""
     , hideTitle = False
     }
 
@@ -242,6 +247,7 @@ type Message
     | PublicGamesReq
         { subscribe : Bool
         , forName : Maybe String
+        , gameid : Maybe GameId
         }
     | PublicGamesRsp { games : List PublicGame }
     | PublicGamesUpdateRsp
