@@ -172,6 +172,7 @@ type ConnectionReason
     | StartGameConnection
     | JoinGameConnection
     | PublicGamesConnection
+    | UpdateConnection
 
 
 type alias ChatSettings =
@@ -423,45 +424,45 @@ storageHandler response state model =
     in
     case response of
         LocalStorage.GetResponse { label, key, value } ->
-            case key of
-                "model" ->
-                    case value of
-                        Nothing ->
-                            mdl |> withCmd cmd
+            if key == pk.model then
+                case value of
+                    Nothing ->
+                        mdl |> withCmd cmd
 
-                        Just v ->
-                            case Debug.log "decodeSavedModel" <| ED.decodeSavedModel v of
-                                Err e ->
-                                    mdl |> withCmd cmd
+                    Just v ->
+                        case Debug.log "decodeSavedModel" <| ED.decodeSavedModel v of
+                            Err e ->
+                                mdl |> withCmd cmd
 
-                                Ok savedModel ->
-                                    let
-                                        mdl2 =
-                                            savedModelToModel savedModel mdl
+                            Ok savedModel ->
+                                let
+                                    mdl2 =
+                                        savedModelToModel savedModel mdl
+                                in
+                                if not mdl2.isLocal && mdl2.isLive && mdl2.playerid /= "" then
+                                    mdl2
+                                        |> webSocketConnect UpdateConnection
 
-                                        ( mdl3, cmd2 ) =
-                                            { mdl2 | gameid = "" }
-                                                |> webSocketConnect PublicGamesConnection
-                                    in
-                                    -- eventually, try to reconnect here.
-                                    { mdl3 | gameid = "" }
-                                        |> withCmds
-                                            [ cmd
-                                            , cmd2
-                                            , if mdl2.isLocal then
-                                                send mdl2 <|
-                                                    NewReq
-                                                        { initialNewReqBody
-                                                            | restoreState =
-                                                                Just mdl2.gameState
-                                                        }
+                                else if not mdl2.isLocal && mdl2.page == PublicPage then
+                                    { mdl2 | gameid = "" }
+                                        |> webSocketConnect PublicGamesConnection
 
-                                              else
-                                                Cmd.none
-                                            ]
+                                else if mdl2.isLocal then
+                                    { mdl2 | gameid = "" }
+                                        |> withCmd
+                                            (send mdl2 <|
+                                                NewReq
+                                                    { initialNewReqBody
+                                                        | restoreState =
+                                                            Just mdl2.gameState
+                                                    }
+                                            )
 
-                _ ->
-                    mdl |> withCmd cmd
+                                else
+                                    mdl2 |> withNoCmd
+
+            else
+                mdl |> withCmd cmd
 
         _ ->
             mdl |> withCmd cmd
@@ -493,7 +494,7 @@ savedModelToModel savedModel model =
         , player = savedModel.player
         , gameState = savedModel.gameState
         , isLocal = savedModel.isLocal
-        , isLive = False -- Need to handle this case by reconnecting if True
+        , isLive = savedModel.isLive
         , gameid = savedModel.gameid
         , playerid = savedModel.playerid
         , settings = savedModel.settings
@@ -695,8 +696,19 @@ incomingMessage interface message mdl =
                                 model.page
                         , publicGames = []
                     }
+
+                model3 =
+                    if model.isLocal then
+                        model2
+
+                    else
+                        { model2
+                            | isLive = False
+                            , playerid = ""
+                            , gameid = ""
+                        }
             in
-            model2
+            model3
                 |> withCmd
                     (if
                         not model2.isLocal
@@ -762,6 +774,19 @@ socketHandler response state mdl =
                                 Task.succeed message
                             )
 
+        ClosedResponse { expected, reason } ->
+            { model
+                | isLive = False
+                , connectionReason = NoConnection
+                , error =
+                    if Debug.log "ClosedResponse, expected" expected then
+                        model.error
+
+                    else
+                        Just <| "Connection unexpectedly closed: " ++ reason
+            }
+                |> withNoCmd
+
         ConnectedResponse _ ->
             { model | error = Nothing }
                 |> withCmd
@@ -806,20 +831,12 @@ socketHandler response state mdl =
                                     , forName = model.settings.name
                                     , gameid = Just model.gameid
                                     }
+
+                        UpdateConnection ->
+                            send model <|
+                                UpdateReq
+                                    { playerid = model.playerid }
                     )
-
-        ClosedResponse { expected, reason } ->
-            { model
-                | isLive = False
-                , connectionReason = NoConnection
-                , error =
-                    if Debug.log "ClosedResponse, expected" expected then
-                        model.error
-
-                    else
-                        Just <| "Connection unexpectedly closed: " ++ reason
-            }
-                |> withNoCmd
 
         _ ->
             model |> withNoCmd
@@ -849,10 +866,16 @@ update msg model =
 
         doSave =
             case msg of
+                Noop ->
+                    False
+
                 Click _ ->
                     cmd == Cmd.none
 
                 NewGame ->
+                    False
+
+                Process _ ->
                     False
 
                 IncomingMessage _ _ ->
@@ -876,7 +899,7 @@ update msg model =
     mdl
         |> withCmds
             [ cmd
-            , if focus then
+            , if focus && doSave then
                 focusId ids.chatInput
 
               else
@@ -919,6 +942,9 @@ updateInternal msg model =
                     { model
                         | isLocal = isLocal
                         , isLive = False
+                        , gameid = ""
+                        , playerid = ""
+                        , otherPlayerid = ""
                         , interface =
                             if isLocal then
                                 proxyServer
@@ -2143,13 +2169,15 @@ local, with no server connection. The "Local" checkbox controls this.
 The "You play" radio buttons control which player you will be if you
 click "Start Game". Zephyrus is the first stone placer.
 
-Fill in "Your Name", change the "Server", if you're using something
-other than the default, and either click "Start Game" or fill in the
+Fill in "Your Name" and either click "Start Game" or fill in the
 "Game ID" and click "Join". If you "Start Game", the "Game ID" will be
 filled in, and you'll need to give this to the other player, so they
-can "Join".
+can "Join" (or use a public game).
 
-To create a public game, which will appear on the "Public" page, check the "Public" checkbox. If you fill in "for name", then only players with that name will be able to see that game. Otherwise, anyone who goes to the public games page will be able to join your game.
+To create a public game, which will appear on the "Public" page, check
+the "Public" checkbox. If you fill in "for name", then only players
+with that name will be able to see that game. Otherwise, anyone who
+goes to the public games page will be able to join your game.
 
 After both players are connected, on each turn, Zephyrus clicks a
 column and Notus clicks a row. Instructions continue at "Both Local
@@ -2507,6 +2535,14 @@ putModel model =
 
         value =
             ED.encodeSavedModel savedModel
+
+        playerid =
+            Debug.log
+                ("put model, isLive: "
+                    ++ Debug.toString model.isLive
+                    ++ ", playerid"
+                )
+                model.playerid
     in
     put pk.model <| Just value
 

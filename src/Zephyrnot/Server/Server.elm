@@ -124,22 +124,21 @@ messageSender model socket state request response =
                         NewRsp { gameid } ->
                             let
                                 sockets =
-                                    Debug.log "NewRsp sockets" <|
-                                        WebSocketFramework.Server.otherSockets gameid
-                                            ""
-                                            model
+                                    WebSocketFramework.Server.otherSockets gameid
+                                        ""
+                                        model
                             in
-                            sendNewRsp (Debug.log "sendNewRsp" model) state
+                            sendNewRsp model state
 
                         JoinRsp { gameid } ->
                             let
                                 sockets =
-                                    Debug.log "JoinRsp sockets" <|
-                                        WebSocketFramework.Server.otherSockets gameid
-                                            ""
-                                            model
+                                    WebSocketFramework.Server.otherSockets
+                                        gameid
+                                        ""
+                                        model
                             in
-                            sendJoinRsp (Debug.log "  model" model) state
+                            sendJoinRsp model state
 
                         PlayRsp _ ->
                             sendPlayRsp model

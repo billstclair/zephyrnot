@@ -6,10 +6,12 @@
      Persist chat.
      Persist playerid and send UpdateReq at startup.
 
-2. Placement mode checkbox
+2. Don't focus the chat input box on mobile browsers. It's usually not
+   a problem, but it sometimes gets in a mode, where it brings up the
+   keyboard after tapping on the board.
+
+3. Placement mode checkbox
 
    * One click to select a node.
 
-3. GameState JSON text for copy/restore
-
-4. Public game subscriptions processed in Zephyrnot.Server.Server
+4. GameState JSON text for copy/restore
