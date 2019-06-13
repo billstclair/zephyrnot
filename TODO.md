@@ -1,17 +1,21 @@
 # Zephyrnot TODO
 
-1. Persistence
+1. Chat
+    * Don't focus the chat input box on mobile browsers. It's usually not
+    a problem, but it sometimes gets in a mode, where it brings up the
+    keyboard after tapping on the board.
+    * Scroll to bottom of chat window, when full.
 
-   * Reopening page in browser should return to where it left.
-     Persist chat.
-     Persist playerid and send UpdateReq at startup.
+1. Red arrows show direction of desired path, horizontal or vertical.
 
-2. Don't focus the chat input box on mobile browsers. It's usually not
-   a problem, but it sometimes gets in a mode, where it brings up the
-   keyboard after tapping on the board.
+1. Saved open games.
+    * New page has a table of open games.
+    * Tap on one to resume it.
+    * Extra charge to have more than 5 ($1/year for 100).
 
-3. Placement mode checkbox
+1. GameState JSON text for save/restore.
 
-   * One click to select a node.
+1. Placement mode checkbox
+    * One click to select a node.
+    * Used to make sample layouts.
 
-4. GameState JSON text for copy/restore
