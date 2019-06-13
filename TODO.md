@@ -6,6 +6,8 @@
     keyboard after tapping on the board.
     * Scroll to bottom of chat window, when full.
 
+1. Real names everywhere. Little mention of Zephyrus and Notus.
+
 1. Red arrows show direction of desired path, horizontal or vertical.
 
 1. Saved open games.
