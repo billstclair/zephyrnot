@@ -242,6 +242,7 @@ type Msg
     | Click ( Int, Int )
     | ChatUpdate ChatSettings (Cmd Msg)
     | ChatSend String ChatSettings
+    | ChatClear
     | DelayedAction (Model -> ( Model, Cmd Msg )) Posix
     | SetZone Zone
     | SetGameCount String
@@ -301,12 +302,9 @@ proxyServer =
     ServerInterface.makeProxyServer fullProcessor IncomingMessage
 
 
-initialChatSettings : ElmChat.CustomSettings () Msg
-initialChatSettings =
+updateChatAttributes : ChatSettings -> ChatSettings
+updateChatAttributes settings =
     let
-        settings =
-            ElmChat.makeSettings "id1" 14 True ChatUpdate
-
         attributes =
             settings.attributes
     in
@@ -323,6 +321,12 @@ initialChatSettings =
                     ]
             }
     }
+
+
+initialChatSettings : ChatSettings
+initialChatSettings =
+    ElmChat.makeSettings "id1" 14 True ChatUpdate
+        |> updateChatAttributes
 
 
 init : Value -> url -> Key -> ( Model, Cmd Msg )
@@ -417,55 +421,78 @@ storageHandler response state model =
 
         cmd =
             if mdl.started && not model.started then
-                get pk.model
+                Cmd.batch
+                    [ get pk.model
+                    , get pk.chat
+                    ]
 
             else
                 Cmd.none
     in
     case response of
         LocalStorage.GetResponse { label, key, value } ->
-            if key == pk.model then
-                case value of
-                    Nothing ->
-                        mdl |> withCmd cmd
+            case value of
+                Nothing ->
+                    mdl |> withNoCmd
 
-                    Just v ->
-                        case Debug.log "decodeSavedModel" <| ED.decodeSavedModel v of
-                            Err e ->
-                                mdl |> withCmd cmd
-
-                            Ok savedModel ->
-                                let
-                                    mdl2 =
-                                        savedModelToModel savedModel mdl
-                                in
-                                if not mdl2.isLocal && mdl2.isLive && mdl2.playerid /= "" then
-                                    mdl2
-                                        |> webSocketConnect UpdateConnection
-
-                                else if not mdl2.isLocal && mdl2.page == PublicPage then
-                                    { mdl2 | gameid = "" }
-                                        |> webSocketConnect PublicGamesConnection
-
-                                else if mdl2.isLocal then
-                                    { mdl2 | gameid = "" }
-                                        |> withCmd
-                                            (send mdl2 <|
-                                                NewReq
-                                                    { initialNewReqBody
-                                                        | restoreState =
-                                                            Just mdl2.gameState
-                                                    }
-                                            )
-
-                                else
-                                    mdl2 |> withNoCmd
-
-            else
-                mdl |> withCmd cmd
+                Just v ->
+                    handleGetResponse key v model
 
         _ ->
             mdl |> withCmd cmd
+
+
+handleGetResponse : String -> Value -> Model -> ( Model, Cmd Msg )
+handleGetResponse key value model =
+    if key == pk.chat then
+        case JD.decodeValue (ElmChat.settingsDecoder ChatUpdate) value of
+            Err _ ->
+                model |> withNoCmd
+
+            Ok settings ->
+                let
+                    chatSettings =
+                        updateChatAttributes settings
+                in
+                { model
+                    | chatSettings = chatSettings
+                }
+                    |> withCmd (ElmChat.restoreScroll chatSettings)
+
+    else if key == pk.model then
+        case Debug.log "decodeSavedModel" <| ED.decodeSavedModel value of
+            Err e ->
+                model |> withNoCmd
+
+            Ok savedModel ->
+                let
+                    model2 =
+                        savedModelToModel savedModel model
+                in
+                if not model2.isLocal && model2.isLive && model2.playerid /= "" then
+                    model2
+                        |> webSocketConnect UpdateConnection
+
+                else if not model2.isLocal && model2.page == PublicPage then
+                    { model2 | gameid = "" }
+                        |> webSocketConnect PublicGamesConnection
+
+                else if model2.isLocal then
+                    { model2 | gameid = "" }
+                        |> withCmd
+                            (send model2 <|
+                                NewReq
+                                    { initialNewReqBody
+                                        | restoreState =
+                                            Just model2.gameState
+                                    }
+                            )
+
+                else
+                    model2 |> withNoCmd
+
+    else
+        model |> withNoCmd
 
 
 modelToSavedModel : Model -> SavedModel
@@ -500,6 +527,20 @@ savedModelToModel savedModel model =
         , settings = savedModel.settings
         , interface = proxyServer
     }
+
+
+playerName : Player -> Model -> String
+playerName player model =
+    let
+        players =
+            model.gameState.players
+    in
+    case player of
+        Zephyrus ->
+            players.zephyrus
+
+        Notus ->
+            players.notus
 
 
 incomingMessage : ServerInterface -> Message -> Model -> ( Model, Cmd Msg )
@@ -642,6 +683,15 @@ incomingMessage interface message mdl =
                 | gameState = gameState
                 , decoration = NoDecoration
                 , firstSelection = NoDecoration
+                , error =
+                    if model.isLocal then
+                        Nothing
+
+                    else if model.chooseFirst == player then
+                        Just "You resigned."
+
+                    else
+                        Just <| playerName player model ++ " resigned."
             }
                 |> withNoCmd
 
@@ -890,6 +940,9 @@ update msg model =
                 ChatSend _ _ ->
                     False
 
+                ChatClear ->
+                    False
+
                 DelayedAction _ _ ->
                     False
 
@@ -1122,10 +1175,21 @@ updateInternal msg model =
 
         ChatUpdate chatSettings cmd ->
             { model | chatSettings = chatSettings }
-                |> withCmd cmd
+                |> withCmd (putChat chatSettings)
 
         ChatSend line chatSettings ->
             chatSend line chatSettings model
+
+        ChatClear ->
+            let
+                chatSettings =
+                    model.chatSettings
+
+                newSettings =
+                    { chatSettings | lines = [] }
+            in
+            { model | chatSettings = newSettings }
+                |> withCmd (putChat newSettings)
 
         DelayedAction updater time ->
             updater { model | time = time }
@@ -1646,12 +1710,27 @@ mainPage bsize model =
 
             else
                 ( True
-                , case gameState.winner of
+                , let
+                    winString player =
+                        let
+                            rawName =
+                                playerName player model
+
+                            name =
+                                if model.isLocal || player /= model.chooseFirst then
+                                    rawName
+
+                                else
+                                    "You (" ++ rawName ++ ")"
+                        in
+                        name ++ " won in " ++ String.fromInt count ++ "!"
+                  in
+                  case gameState.winner of
                     ZephyrusWinner ->
-                        "Zephyrus won in " ++ String.fromInt count ++ "!"
+                        winString Zephyrus
 
                     NotusWinner ->
-                        "Notus won in " ++ String.fromInt count ++ "!"
+                        winString Notus
 
                     NoWinner ->
                         case model.firstSelection of
@@ -1818,6 +1897,9 @@ mainPage bsize model =
                                 "Send"
                                 ChatSend
                                 model.chatSettings
+                            , text " "
+                            , button [ onClick ChatClear ]
+                                [ text "Clear" ]
                             , ElmChat.chat model.chatSettings
                             , br
                             ]
@@ -2547,6 +2629,13 @@ putModel model =
     put pk.model <| Just value
 
 
+putChat : ChatSettings -> Cmd Msg
+putChat settings =
+    ElmChat.settingsEncoder settings
+        |> Just
+        |> put pk.chat
+
+
 put : String -> Maybe Value -> Cmd Msg
 put key value =
     localStorageSend (LocalStorage.put key value)
@@ -2601,6 +2690,9 @@ funnelDict =
         getCmdPort
 
 
+{-| Persistent storage keys
+-}
 pk =
     { model = "model"
+    , chat = "chat"
     }

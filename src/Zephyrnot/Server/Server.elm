@@ -89,9 +89,23 @@ encodeDecode =
     }
 
 
+{-| Two weeks
+-}
+deathRowDuration : Int
+deathRowDuration =
+    14 * 24 * 60 * 60 * 1000
+
+
 messageSender : ServerMessageSender ServerModel Message GameState Player
-messageSender model socket state request response =
+messageSender mdl socket state request response =
     let
+        model =
+            if WebSocketFramework.Server.getDeathRowDuration mdl == deathRowDuration then
+                mdl
+
+            else
+                WebSocketFramework.Server.setDeathRowDuration mdl deathRowDuration
+
         ( state2, cmd ) =
             case request of
                 PublicGamesReq { subscribe, forName } ->
@@ -420,7 +434,7 @@ userFunctions =
     , messageSender = messageSender
     , messageToGameid = Just Types.messageToGameid
     , messageToPlayerid = Just Types.messageToPlayerid
-    , autoDeleteGame = Nothing
+    , autoDeleteGame = Just (\gameid serverState -> False)
     , gamesDeleter = Just gamesDeleter
     , playersDeleter = Nothing
     , inputPort = inputPort
