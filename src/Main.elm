@@ -325,7 +325,7 @@ updateChatAttributes settings =
 
 initialChatSettings : ChatSettings
 initialChatSettings =
-    ElmChat.makeSettings "id1" 14 True ChatUpdate
+    ElmChat.makeSettings ids.chatOutput 14 True ChatUpdate
         |> updateChatAttributes
 
 
@@ -452,7 +452,8 @@ handleGetResponse key value model =
             Ok settings ->
                 let
                     chatSettings =
-                        updateChatAttributes settings
+                        updateChatAttributes
+                            { settings | id = ids.chatOutput }
                 in
                 { model
                     | chatSettings = chatSettings
@@ -782,7 +783,13 @@ incomingMessage interface message mdl =
                             Nothing
             in
             { model | chatSettings = chatSettings }
-                |> withCmd cmd
+                |> withCmds
+                    [ cmd
+
+                    -- Kluge. ElmChat is supposed to do this
+                    , Task.attempt (\_ -> Noop) <|
+                        Dom.setViewportOf ids.chatOutput 0 1000000
+                    ]
 
         _ ->
             model |> withNoCmd
@@ -912,7 +919,9 @@ update msg model =
             mdl.gameState.players
 
         focus =
-            not mdl.isLocal && mdl.isLive && zephyrus /= "" && notus /= ""
+            --not mdl.isLocal && mdl.isLive && zephyrus /= "" && notus /= ""
+            --might be able to be smart and do this just on desktop, but not for now
+            False
 
         doSave =
             case msg of
@@ -1666,7 +1675,8 @@ view model =
 
 
 ids =
-    { chatInput = "chatInput"
+    { chatOutput = "chatOutput"
+    , chatInput = "chatInput"
     , forName = "forName"
     }
 
@@ -2619,12 +2629,7 @@ putModel model =
             ED.encodeSavedModel savedModel
 
         playerid =
-            Debug.log
-                ("put model, isLive: "
-                    ++ Debug.toString model.isLive
-                    ++ ", playerid"
-                )
-                model.playerid
+            model.playerid
     in
     put pk.model <| Just value
 
