@@ -1,13 +1,5 @@
 # Zephyrnot TODO
 
-1. Chat
-    * Don't focus the chat input box on mobile browsers. It's usually not
-    a problem, but it sometimes gets in a mode, where it brings up the
-    keyboard after tapping on the board.
-    * Scroll to bottom of chat window, when full.
-
-1. Real names everywhere. Little mention of Zephyrus and Notus.
-
 1. Red arrows show direction of desired path, horizontal or vertical.
 
 1. Saved open games.
