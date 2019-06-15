@@ -1890,12 +1890,35 @@ mainPage bsize model =
                                 -- Can't happen
                                 ""
                 )
+
+        currentPlayer =
+            if not model.isLocal then
+                Just model.chooseFirst
+
+            else
+                case model.decoration of
+                    NoDecoration ->
+                        if model.firstSelection == NoDecoration then
+                            Just model.chooseFirst
+
+                        else
+                            Just <| Types.otherPlayer model.chooseFirst
+
+                    RowSelectedDecoration _ ->
+                        Just Notus
+
+                    ColSelectedDecoration _ ->
+                        Just Zephyrus
+
+                    AlreadyFilledDecoration _ ->
+                        Just gameState.whoseTurn
     in
     div [ align "center" ]
         [ Board.render bsize
             Click
             (Just <| Board.getSizer DefaultSizer)
             model.decoration
+            currentPlayer
             gameState.path
             gameState.board
         , span

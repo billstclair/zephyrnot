@@ -31,8 +31,20 @@ import Html exposing (Html)
 import List.Extra as LE
 import Random exposing (Seed)
 import Set exposing (Set)
-import Svg exposing (Attribute, Svg, foreignObject, g, line, rect, svg)
-import Svg.Attributes
+import Svg
+    exposing
+        ( Attribute
+        , Svg
+        , defs
+        , foreignObject
+        , g
+        , line
+        , marker
+        , path
+        , rect
+        , svg
+        )
+import Svg.Attributes as Attributes
     exposing
         ( cx
         , cy
@@ -41,8 +53,15 @@ import Svg.Attributes
         , fillOpacity
         , fontSize
         , height
+        , markerEnd
+        , markerHeight
+        , markerStart
+        , markerWidth
+        , orient
         , points
         , r
+        , refX
+        , refY
         , rx
         , ry
         , stroke
@@ -52,6 +71,7 @@ import Svg.Attributes
         , style
         , textAnchor
         , transform
+        , viewBox
         , width
         , x
         , x1
@@ -460,8 +480,8 @@ getPathSizer sizer =
         |> .path
 
 
-render : Int -> (( Int, Int ) -> msg) -> Maybe Sizer -> Decoration -> List ( Int, Int ) -> Board -> Html msg
-render size tagger sizer decoration path board =
+render : Int -> (( Int, Int ) -> msg) -> Maybe Sizer -> Decoration -> Maybe Player -> List ( Int, Int ) -> Board -> Html msg
+render size tagger sizer decoration player path board =
     let
         sizeS =
             tos size
@@ -475,12 +495,73 @@ render size tagger sizer decoration path board =
         ]
     <|
         List.concat
-            [ [ drawCompass delta ]
+            [ [ defs []
+                    [ arrowMarker ]
+              , drawCompass delta
+              ]
             , drawRows delta
             , drawCols delta sizer board
+            , drawDirectionArrow delta player
             , drawPath delta sizer path
             , drawDecoration delta decoration
             , drawClickRects delta tagger
+            ]
+
+
+directionArrowColor : String
+directionArrowColor =
+    "green"
+
+
+arrowMarker : Svg msg
+arrowMarker =
+    marker
+        [ Attributes.id "arrow"
+        , viewBox "0 0 10 10"
+        , refX "5"
+        , refY "5"
+        , markerWidth "4"
+        , markerHeight "4"
+        , orient "auto-start-reverse"
+        , stroke directionArrowColor
+        , fill directionArrowColor
+        ]
+        [ path [ d "M 0 0 L 10 5 L 0 10 z" ]
+            []
+        ]
+
+
+drawDirectionArrow : Int -> Maybe Player -> List (Svg msg)
+drawDirectionArrow delta mplayer =
+    case mplayer of
+        Nothing ->
+            []
+
+        Just player ->
+            let
+                ( ( xx1, yy1 ), ( xx2, yy2 ) ) =
+                    case player of
+                        Zephyrus ->
+                            ( ( delta, delta )
+                            , ( delta * 5, delta )
+                            )
+
+                        Notus ->
+                            ( ( delta, delta )
+                            , ( delta, delta * 5 )
+                            )
+            in
+            [ Svg.line
+                [ x1 <| tos xx1
+                , y1 <| tos yy1
+                , x2 <| tos xx2
+                , y2 <| tos yy2
+                , strokeWidth <| tos lineWidth
+                , stroke directionArrowColor
+                , markerStart "url(#arrow)"
+                , markerEnd "url(#arrow)"
+                ]
+                []
             ]
 
 
