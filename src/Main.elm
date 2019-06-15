@@ -198,6 +198,7 @@ type alias Model =
     -- persistent below here
     , page : Page
     , decoration : Decoration
+    , otherDecoration : Decoration
     , firstSelection : Decoration
     , chooseFirst : Player
     , player : Player
@@ -356,6 +357,7 @@ init flags url key =
             -- persistent fields
             , page = MainPage
             , decoration = NoDecoration
+            , otherDecoration = NoDecoration
             , firstSelection = NoDecoration
             , chooseFirst = Zephyrus
             , player = Zephyrus
@@ -500,6 +502,7 @@ modelToSavedModel : Model -> SavedModel
 modelToSavedModel model =
     { page = model.page
     , decoration = model.decoration
+    , otherDecoration = model.otherDecoration
     , firstSelection = model.firstSelection
     , chooseFirst = model.chooseFirst
     , player = model.player
@@ -517,6 +520,7 @@ savedModelToModel savedModel model =
     { model
         | page = savedModel.page
         , decoration = savedModel.decoration
+        , otherDecoration = savedModel.otherDecoration
         , firstSelection = savedModel.firstSelection
         , chooseFirst = savedModel.chooseFirst
         , player = savedModel.player
@@ -655,15 +659,42 @@ incomingMessage interface message mdl =
             { model
                 | gameState = gameState
                 , decoration = NoDecoration
+                , otherDecoration = NoDecoration
                 , firstSelection = NoDecoration
             }
                 |> withNoCmd
 
         PlayRsp { gameid, gameState, decoration } ->
             if not model.isLocal then
+                let
+                    ( idx, od ) =
+                        case decoration of
+                            ColSelectedDecoration x ->
+                                ( x, decoration )
+
+                            RowSelectedDecoration x ->
+                                ( x, decoration )
+
+                            _ ->
+                                ( 0, NoDecoration )
+
+                    ( d, od2 ) =
+                        if idx < 0 then
+                            ( model.decoration
+                            , if model.decoration == NoDecoration then
+                                decoration
+
+                              else
+                                NoDecoration
+                            )
+
+                        else
+                            ( decoration, NoDecoration )
+                in
                 { model
                     | gameState = gameState
-                    , decoration = decoration
+                    , decoration = d
+                    , otherDecoration = od2
                 }
                     |> withNoCmd
 
@@ -688,6 +719,7 @@ incomingMessage interface message mdl =
             { model
                 | gameState = gameState
                 , decoration = NoDecoration
+                , otherDecoration = NoDecoration
                 , firstSelection = NoDecoration
                 , error =
                     if model.isLocal then
@@ -705,6 +737,7 @@ incomingMessage interface message mdl =
             { model
                 | gameState = gameState
                 , decoration = NoDecoration
+                , otherDecoration = NoDecoration
                 , firstSelection = NoDecoration
                 , player = player
                 , error =
@@ -720,6 +753,7 @@ incomingMessage interface message mdl =
             { model
                 | gameState = gameState
                 , decoration = NoDecoration
+                , otherDecoration = NoDecoration
                 , firstSelection = NoDecoration
             }
                 |> withNoCmd
@@ -1869,7 +1903,17 @@ mainPage bsize model =
             [ br
             , case model.error of
                 Nothing ->
-                    text ""
+                    if model.otherDecoration == NoDecoration then
+                        text ""
+
+                    else
+                        span [ style "color" "red" ]
+                            [ text <|
+                                playerName (Types.otherPlayer model.chooseFirst)
+                                    model
+                                    ++ " made a choice"
+                            , br
+                            ]
 
                 Just err ->
                     span [ style "color" "red" ]

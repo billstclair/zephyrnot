@@ -120,6 +120,7 @@ emptySettings =
 type alias SavedModel =
     { page : Page
     , decoration : Decoration
+    , otherDecoration : Decoration
     , firstSelection : Decoration
     , chooseFirst : Player
     , player : Player

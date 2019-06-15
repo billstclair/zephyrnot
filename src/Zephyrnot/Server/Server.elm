@@ -350,21 +350,26 @@ sendJoinRsp model state response socket =
 sendPlayRsp : Model -> Message -> Socket -> Cmd Msg
 sendPlayRsp model response socket =
     case response of
-        PlayRsp { decoration } ->
+        PlayRsp playRecord ->
             let
-                toOne =
-                    case decoration of
+                ( toOne, tagger ) =
+                    case playRecord.decoration of
                         RowSelectedDecoration _ ->
-                            True
+                            ( True, RowSelectedDecoration )
 
                         ColSelectedDecoration _ ->
-                            True
+                            ( True, ColSelectedDecoration )
 
                         _ ->
-                            False
+                            ( False, \_ -> NoDecoration )
             in
             if toOne then
-                sendToOne response socket
+                Cmd.batch
+                    [ sendToOne response socket
+                    , sendToOthers model
+                        (PlayRsp { playRecord | decoration = tagger -1 })
+                        socket
+                    ]
 
             else
                 sendToAll model response socket

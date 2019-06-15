@@ -84,6 +84,7 @@ encodeSavedModel model =
     JE.object
         [ ( "page", encodePage model.page )
         , ( "decoration", encodeDecoration model.decoration )
+        , ( "otherDecoration", encodeDecoration model.otherDecoration )
         , ( "firstSelection", encodeDecoration model.firstSelection )
         , ( "chooseFirst", encodePlayer model.chooseFirst )
         , ( "player", encodePlayer model.player )
@@ -106,6 +107,7 @@ savedModelDecoder =
     JD.succeed SavedModel
         |> optional "page" pageDecoder MainPage
         |> required "decoration" decorationDecoder
+        |> optional "otherDecoration" decorationDecoder NoDecoration
         |> required "firstSelection" decorationDecoder
         |> required "chooseFirst" playerDecoder
         |> required "player" playerDecoder

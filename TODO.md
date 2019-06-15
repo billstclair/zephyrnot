@@ -16,13 +16,13 @@
 
 1. In Safari 12.1 on Mac, getting one-pixel line in center of orange highlights.
 
-1. "[player x] moved. You need to move now."
-
 1. "New game" should switch roles.
 
 1. Sounds, shakes.
 
 1. GameState JSON text for save/restore.
+
+1. Dark mode
 
 1. Placement mode checkbox
     * One click to select a node.
