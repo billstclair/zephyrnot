@@ -242,12 +242,12 @@ protocolData =
         }
     , PublicGamesReq
         { subscribe = False
-        , forName = Nothing
+        , forName = ""
         , gameid = Nothing
         }
     , PublicGamesReq
         { subscribe = True
-        , forName = Just "Bill"
+        , forName = "Bill"
         , gameid = Just "80"
         }
     , PublicGamesRsp
@@ -402,7 +402,7 @@ privateGameState1 =
 privateGameState2 =
     PrivateGameState
         (ColSelectedDecoration 2)
-        (Set.fromList [ "1", "2", "3" ])
+        (Set.fromList [ ( "s1", "1" ), ( "s2", "2" ), ( "s3", "3" ) ])
 
 
 privateGameState3 =
