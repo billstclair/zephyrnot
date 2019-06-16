@@ -480,32 +480,50 @@ getPathSizer sizer =
         |> .path
 
 
-render : Int -> (( Int, Int ) -> msg) -> Maybe Sizer -> Decoration -> Maybe Player -> List ( Int, Int ) -> Board -> Html msg
-render size tagger sizer decoration player path board =
+render : Int -> (( Int, Int ) -> msg) -> Maybe Sizer -> Decoration -> Maybe Player -> Bool -> List ( Int, Int ) -> Board -> Html msg
+render size tagger sizer decoration player rotated path board =
     let
         sizeS =
             tos size
 
         delta =
             (size - lineWidth) // 6
+
+        translate =
+            tos <| delta * 3
     in
     svg
         [ width sizeS
         , height sizeS
         ]
-    <|
-        List.concat
-            [ [ defs []
-                    [ arrowMarker ]
-              , drawCompass delta
-              ]
-            , drawRows delta
-            , drawCols delta sizer board
-            , drawDirectionArrow delta player
-            , drawPath delta sizer path
-            , drawDecoration delta decoration
-            , drawClickRects delta tagger
-            ]
+        [ g
+            (if rotated then
+                [ transform
+                    ("rotate(-90,"
+                        ++ translate
+                        ++ ","
+                        ++ translate
+                        ++ ")"
+                    )
+                ]
+
+             else
+                []
+            )
+          <|
+            List.concat
+                [ [ defs []
+                        [ arrowMarker ]
+                  , drawCompass delta
+                  ]
+                , drawRows delta
+                , drawCols delta sizer board
+                , drawDirectionArrow delta player
+                , drawPath delta sizer path
+                , drawDecoration delta decoration
+                , drawClickRects delta tagger
+                ]
+        ]
 
 
 directionArrowColor : String

@@ -1919,6 +1919,7 @@ mainPage bsize model =
             (Just <| Board.getSizer DefaultSizer)
             model.decoration
             currentPlayer
+            True
             gameState.path
             gameState.board
         , span
