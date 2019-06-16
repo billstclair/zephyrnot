@@ -90,6 +90,7 @@ encodeSavedModel model =
         , ( "player", encodePlayer model.player )
         , ( "gameState", encodeGameState True model.gameState )
         , ( "isLocal", JE.bool model.isLocal )
+        , ( "northIsUp", JE.bool model.northIsUp )
         , ( "isLive", JE.bool model.isLive )
         , ( "gameid", JE.string model.gameid )
         , ( "playerid", JE.string model.playerid )
@@ -113,6 +114,7 @@ savedModelDecoder =
         |> required "player" playerDecoder
         |> required "gameState" gameStateDecoder
         |> optional "isLocal" JD.bool False
+        |> optional "northIsUp" JD.bool False
         |> optional "isLive" JD.bool False
         |> optional "gameid" JD.string ""
         |> optional "playerid" JD.string ""

@@ -204,6 +204,7 @@ type alias Model =
     , player : Player
     , gameState : GameState
     , isLocal : Bool
+    , northIsUp : Bool
     , gameid : String
     , playerid : PlayerId
     , isLive : Bool
@@ -226,6 +227,7 @@ type Msg
     | SetDecoration Decoration
     | SetChooseFirst Player
     | SetIsLocal Bool
+    | SetNorthIsUp Bool
     | SetName String
     | SetIsPublic Bool
     | SetForName String
@@ -363,6 +365,7 @@ init flags url key =
             , player = Zephyrus
             , gameState = Interface.emptyGameState (PlayerNames "" "")
             , isLocal = False
+            , northIsUp = False
             , gameid = ""
             , playerid = ""
             , isLive = False
@@ -508,6 +511,7 @@ modelToSavedModel model =
     , player = model.player
     , gameState = model.gameState
     , isLocal = model.isLocal
+    , northIsUp = model.northIsUp
     , isLive = model.isLive
     , gameid = model.gameid
     , playerid = model.playerid
@@ -526,6 +530,7 @@ savedModelToModel savedModel model =
         , player = savedModel.player
         , gameState = savedModel.gameState
         , isLocal = savedModel.isLocal
+        , northIsUp = savedModel.northIsUp
         , isLive = savedModel.isLive
         , gameid = savedModel.gameid
         , playerid = savedModel.playerid
@@ -742,7 +747,11 @@ incomingMessage interface message mdl =
                 , player = player
                 , error =
                     if not model.isLocal && player /= model.chooseFirst then
-                        Just "Other player asked for a new game"
+                        let
+                            name =
+                                playerName player model
+                        in
+                        Just <| name ++ " asked for a new game"
 
                     else
                         Nothing
@@ -1071,6 +1080,10 @@ updateInternal msg model =
                         Cmd.none
                     )
 
+        SetNorthIsUp northIsUp ->
+            { model | northIsUp = northIsUp }
+                |> withNoCmd
+
         SetName name ->
             { model | settings = { settings | name = name } }
                 |> withNoCmd
@@ -1193,7 +1206,9 @@ updateInternal msg model =
                                     Zephyrus
 
                                 else
-                                    model.chooseFirst
+                                    -- This should probably be enforced
+                                    -- by the server.
+                                    Types.otherPlayer model.chooseFirst
                         in
                         ( model.playerid, ChooseNew player )
             in
@@ -1750,6 +1765,42 @@ mainPage bsize model =
         { zephyrus, notus } =
             gameState.players
 
+        currentPlayer =
+            if not model.isLocal then
+                Just model.chooseFirst
+
+            else
+                case model.decoration of
+                    NoDecoration ->
+                        if model.firstSelection == NoDecoration then
+                            Just model.chooseFirst
+
+                        else
+                            Just <| Types.otherPlayer model.chooseFirst
+
+                    RowSelectedDecoration _ ->
+                        Just Notus
+
+                    ColSelectedDecoration _ ->
+                        Just Zephyrus
+
+                    AlreadyFilledDecoration _ ->
+                        Just gameState.whoseTurn
+
+        ( rowname, colname ) =
+            if model.northIsUp || currentPlayer == Just Notus then
+                ( "row", "column" )
+
+            else
+                ( "column", "row" )
+
+        rotated =
+            if model.northIsUp then
+                False
+
+            else
+                currentPlayer == Just Zephyrus
+
         ( playing, message ) =
             if not model.isLive then
                 ( False
@@ -1799,24 +1850,24 @@ mainPage bsize model =
                                 case model.decoration of
                                     NoDecoration ->
                                         if model.chooseFirst == Zephyrus then
-                                            zephyrus ++ ", pick a column"
+                                            zephyrus ++ ", pick a " ++ colname
 
                                         else
-                                            notus ++ ", pick a row"
+                                            notus ++ ", pick a " ++ rowname
 
                                     ColSelectedDecoration _ ->
                                         if model.isLocal then
-                                            zephyrus ++ ", confirm or pick another column"
+                                            zephyrus ++ ", confirm or pick another " ++ colname
 
                                         else
-                                            "Waiting for " ++ notus ++ " to pick a row (you may pick another column)"
+                                            "Waiting for " ++ notus ++ " to pick a " ++ rowname ++ " (you may pick another " ++ colname ++ ")"
 
                                     RowSelectedDecoration _ ->
                                         if model.isLocal then
-                                            notus ++ ", confirm or pick another row"
+                                            notus ++ ", confirm or pick another " ++ rowname
 
                                         else
-                                            "Waiting for " ++ zephyrus ++ " to pick a column (you may pick another row)"
+                                            "Waiting for " ++ zephyrus ++ " to pick a " ++ colname ++ " (you may pick another " ++ rowname ++ ")"
 
                                     AlreadyFilledDecoration _ ->
                                         case gameState.whoseTurn of
@@ -1825,25 +1876,25 @@ mainPage bsize model =
                                                     model.isLocal
                                                         || (model.chooseFirst == Zephyrus)
                                                 then
-                                                    zephyrus ++ ", pick another column"
+                                                    zephyrus ++ ", pick another " ++ colname
 
                                                 else
-                                                    "Waiting for " ++ zephyrus ++ " to pick another column"
+                                                    "Waiting for " ++ zephyrus ++ " to pick another " ++ colname
 
                                             Notus ->
                                                 if
                                                     model.isLocal
                                                         || (model.chooseFirst == Notus)
                                                 then
-                                                    notus ++ ", pick another row"
+                                                    notus ++ ", pick another " ++ rowname
 
                                                 else
-                                                    "Waiting for " ++ notus ++ " to pick another row"
+                                                    "Waiting for " ++ notus ++ " to pick another " ++ rowname
 
                             RowSelectedDecoration _ ->
                                 case model.decoration of
                                     NoDecoration ->
-                                        notus ++ " chose. " ++ zephyrus ++ ", pick a column"
+                                        notus ++ " chose. " ++ zephyrus ++ ", pick a " ++ colname
 
                                     AlreadyFilledDecoration _ ->
                                         case gameState.whoseTurn of
@@ -1852,66 +1903,44 @@ mainPage bsize model =
                                                     model.isLocal
                                                         || (model.chooseFirst == Zephyrus)
                                                 then
-                                                    zephyrus ++ ", pick another column"
+                                                    zephyrus ++ ", pick another " ++ colname
 
                                                 else
-                                                    "Waiting for " ++ zephyrus ++ " to pick another column"
+                                                    "Waiting for " ++ zephyrus ++ " to pick another " ++ colname
 
                                             Notus ->
                                                 if
                                                     model.isLocal
                                                         || (model.chooseFirst == Notus)
                                                 then
-                                                    notus ++ ", pick another row"
+                                                    notus ++ ", pick another " ++ rowname
 
                                                 else
-                                                    "Waiting for " ++ notus ++ " to pick another row"
+                                                    "Waiting for " ++ notus ++ " to pick another " ++ rowname
 
                                     _ ->
-                                        notus ++ " chose." ++ zephyrus ++ ", confirm or pick another column"
+                                        notus ++ " chose. " ++ zephyrus ++ ", confirm or pick another " ++ colname
 
                             ColSelectedDecoration _ ->
                                 case model.decoration of
                                     NoDecoration ->
-                                        zephyrus ++ " chose." ++ notus ++ ", pick a row"
+                                        zephyrus ++ " chose. " ++ notus ++ ", pick a " ++ rowname
 
                                     AlreadyFilledDecoration _ ->
                                         case gameState.whoseTurn of
                                             Zephyrus ->
-                                                zephyrus ++ ", pick another column"
+                                                zephyrus ++ ", pick another " ++ colname
 
                                             Notus ->
-                                                notus ++ ", pick another row"
+                                                notus ++ ", pick another " ++ rowname
 
                                     _ ->
-                                        zephyrus ++ " chose. " ++ notus ++ ", confirm or pick another row"
+                                        zephyrus ++ " chose. " ++ notus ++ ", confirm or pick another " ++ rowname
 
                             AlreadyFilledDecoration _ ->
                                 -- Can't happen
                                 ""
                 )
-
-        currentPlayer =
-            if not model.isLocal then
-                Just model.chooseFirst
-
-            else
-                case model.decoration of
-                    NoDecoration ->
-                        if model.firstSelection == NoDecoration then
-                            Just model.chooseFirst
-
-                        else
-                            Just <| Types.otherPlayer model.chooseFirst
-
-                    RowSelectedDecoration _ ->
-                        Just Notus
-
-                    ColSelectedDecoration _ ->
-                        Just Zephyrus
-
-                    AlreadyFilledDecoration _ ->
-                        Just gameState.whoseTurn
     in
     div [ align "center" ]
         [ Board.render bsize
@@ -1919,7 +1948,7 @@ mainPage bsize model =
             (Just <| Board.getSizer DefaultSizer)
             model.decoration
             currentPlayer
-            True
+            rotated
             gameState.path
             gameState.board
         , span
@@ -1961,6 +1990,14 @@ mainPage bsize model =
                     )
                 ]
                 [ text message ]
+            , br
+            , b "North is up: "
+            , input
+                [ type_ "checkbox"
+                , checked model.northIsUp
+                , onCheck SetNorthIsUp
+                ]
+                []
             , br
             , if gameState.winner /= NoWinner then
                 text ""

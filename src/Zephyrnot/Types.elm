@@ -126,6 +126,7 @@ type alias SavedModel =
     , player : Player
     , gameState : GameState
     , isLocal : Bool
+    , northIsUp : Bool
     , isLive : Bool
     , gameid : String
     , playerid : String
