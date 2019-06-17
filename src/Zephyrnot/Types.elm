@@ -16,6 +16,7 @@ module Zephyrnot.Types exposing
     , Decoration(..)
     , GameState
     , Message(..)
+    , OneScore
     , Page(..)
     , Player(..)
     , PlayerNames
@@ -35,10 +36,12 @@ module Zephyrnot.Types exposing
     , messageToPlayer
     , messageToPlayerid
     , otherPlayer
+    , zeroOneScore
     , zeroScore
     )
 
 import Array exposing (Array)
+import Dict exposing (Dict)
 import Set exposing (Set)
 import WebSocketFramework.Types
     exposing
@@ -87,17 +90,26 @@ type Page
     | PublicPage
 
 
-type alias Score =
-    { zephyrusGames : Int
-    , notusGames : Int
-    , zephyrusScore : Int
-    , notusScore : Int
+type alias OneScore =
+    { games : Int
+    , score : Int
     }
+
+
+zeroOneScore : OneScore
+zeroOneScore =
+    { games = 0
+    , score = 0
+    }
+
+
+type alias Score =
+    Dict String OneScore
 
 
 zeroScore : Score
 zeroScore =
-    Score 0 0 0 0
+    Dict.empty
 
 
 type alias Settings =

@@ -157,6 +157,20 @@ messageSender mdl socket state request response =
                         PlayRsp _ ->
                             sendPlayRsp model
 
+                        AnotherGameRsp record ->
+                            \_ _ ->
+                                Cmd.batch
+                                    [ sendToOne response socket
+                                    , sendToOthers model
+                                        (AnotherGameRsp
+                                            { record
+                                                | player =
+                                                    Types.otherPlayer record.player
+                                            }
+                                        )
+                                        socket
+                                    ]
+
                         _ ->
                             sendToAll model
     in

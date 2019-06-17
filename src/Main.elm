@@ -194,6 +194,7 @@ type alias Model =
     , chatSettings : ChatSettings
     , publicGames : List PublicGame
     , time : Posix
+    , requestedNew : Bool
 
     -- persistent below here
     , page : Page
@@ -355,6 +356,7 @@ init flags url key =
             , chatSettings = initialChatSettings
             , publicGames = []
             , time = Time.millisToPosix 0
+            , requestedNew = False
 
             -- persistent fields
             , page = MainPage
@@ -593,9 +595,9 @@ incomingMessage interface message mdl =
                         , isLive = True
                         , connectionReason = NoConnection
                         , decoration = gameState.private.decoration
-                        , chooseFirst =
+                        , player =
                             if playerid == Nothing then
-                                model.chooseFirst
+                                model.player
 
                             else
                                 player
@@ -636,14 +638,14 @@ incomingMessage interface message mdl =
                         , playerid = ""
                         , otherPlayerid = ""
                         , error =
-                            if player == model.chooseFirst then
+                            if player == model.player then
                                 Nothing
 
                             else
                                 let
                                     name =
                                         playerName
-                                            (Types.otherPlayer model.chooseFirst)
+                                            (Types.otherPlayer model.player)
                                             model
                                 in
                                 Just <| name ++ " left"
@@ -730,7 +732,7 @@ incomingMessage interface message mdl =
                     if model.isLocal then
                         Nothing
 
-                    else if model.chooseFirst == player then
+                    else if model.player == player then
                         Just "You resigned."
 
                     else
@@ -740,16 +742,18 @@ incomingMessage interface message mdl =
 
         AnotherGameRsp { gameid, gameState, player } ->
             { model
-                | gameState = gameState
+                | requestedNew = False
+                , gameState = gameState
                 , decoration = NoDecoration
                 , otherDecoration = NoDecoration
                 , firstSelection = NoDecoration
                 , player = player
                 , error =
-                    if not model.isLocal && player /= model.chooseFirst then
+                    if not model.isLocal && not model.requestedNew then
                         let
                             name =
-                                playerName player model
+                                playerName (Types.otherPlayer player)
+                                    { model | gameState = gameState }
                         in
                         Just <| name ++ " asked for a new game"
 
@@ -1176,7 +1180,7 @@ updateInternal msg model =
             let
                 resigning =
                     if not model.isLocal then
-                        model.chooseFirst
+                        model.player
 
                     else
                         gameState.whoseTurn
@@ -1208,11 +1212,11 @@ updateInternal msg model =
                                 else
                                     -- This should probably be enforced
                                     -- by the server.
-                                    Types.otherPlayer model.chooseFirst
+                                    Types.otherPlayer model.player
                         in
                         ( model.playerid, ChooseNew player )
             in
-            model
+            { model | requestedNew = True }
                 |> withCmd
                     (send model <|
                         PlayReq
@@ -1529,7 +1533,7 @@ doClick row col model =
         let
             withACmd =
                 withPlayReq model.playerid <|
-                    case model.chooseFirst of
+                    case model.player of
                         Zephyrus ->
                             ChooseCol col
 
@@ -1538,7 +1542,7 @@ doClick row col model =
         in
         case model.decoration of
             AlreadyFilledDecoration _ ->
-                if model.chooseFirst /= gameState.whoseTurn then
+                if model.player /= gameState.whoseTurn then
                     model |> withNoCmd
 
                 else
@@ -1616,7 +1620,7 @@ doClick row col model =
                     NoDecoration ->
                         { model
                             | decoration =
-                                if model.chooseFirst == Zephyrus then
+                                if model.player == Zephyrus then
                                     ColSelectedDecoration col
 
                                 else
@@ -1767,7 +1771,7 @@ mainPage bsize model =
 
         currentPlayer =
             if not model.isLocal then
-                Just model.chooseFirst
+                Just model.player
 
             else
                 case model.decoration of
@@ -1829,7 +1833,7 @@ mainPage bsize model =
                                 playerName player model
 
                             name =
-                                if model.isLocal || player /= model.chooseFirst then
+                                if model.isLocal || player /= model.player then
                                     rawName
 
                                 else
@@ -1849,7 +1853,7 @@ mainPage bsize model =
                             NoDecoration ->
                                 case model.decoration of
                                     NoDecoration ->
-                                        if model.chooseFirst == Zephyrus then
+                                        if model.player == Zephyrus then
                                             zephyrus ++ ", pick a " ++ colname
 
                                         else
@@ -1874,7 +1878,7 @@ mainPage bsize model =
                                             Zephyrus ->
                                                 if
                                                     model.isLocal
-                                                        || (model.chooseFirst == Zephyrus)
+                                                        || (model.player == Zephyrus)
                                                 then
                                                     zephyrus ++ ", pick another " ++ colname
 
@@ -1884,7 +1888,7 @@ mainPage bsize model =
                                             Notus ->
                                                 if
                                                     model.isLocal
-                                                        || (model.chooseFirst == Notus)
+                                                        || (model.player == Notus)
                                                 then
                                                     notus ++ ", pick another " ++ rowname
 
@@ -1901,7 +1905,7 @@ mainPage bsize model =
                                             Zephyrus ->
                                                 if
                                                     model.isLocal
-                                                        || (model.chooseFirst == Zephyrus)
+                                                        || (model.player == Zephyrus)
                                                 then
                                                     zephyrus ++ ", pick another " ++ colname
 
@@ -1911,7 +1915,7 @@ mainPage bsize model =
                                             Notus ->
                                                 if
                                                     model.isLocal
-                                                        || (model.chooseFirst == Notus)
+                                                        || (model.player == Notus)
                                                 then
                                                     notus ++ ", pick another " ++ rowname
 
@@ -1962,7 +1966,7 @@ mainPage bsize model =
                     else
                         span [ style "color" "red" ]
                             [ text <|
-                                playerName (Types.otherPlayer model.chooseFirst)
+                                playerName (Types.otherPlayer model.player)
                                     model
                                     ++ " made a choice"
                             , br
@@ -2042,7 +2046,7 @@ mainPage bsize model =
                                 ""
 
                             _ ->
-                                if model.chooseFirst == Zephyrus then
+                                if model.player == Zephyrus then
                                     "You (" ++ zephyrus ++ ")"
 
                                 else
@@ -2055,7 +2059,7 @@ mainPage bsize model =
                                 ""
 
                             _ ->
-                                if model.chooseFirst == Notus then
+                                if model.player == Notus then
                                     "You (" ++ notus ++ ")"
 
                                 else
@@ -2086,22 +2090,33 @@ mainPage bsize model =
                         disabled
                         (SetChooseFirst Notus)
                     ]
-            , br
-            , text <| zephyrus ++ "/" ++ notus ++ ", points: "
-            , text <| String.fromInt score.zephyrusScore
-            , text "/"
-            , text <| String.fromInt score.notusScore
-            , text ", games: "
-            , text <| String.fromInt score.zephyrusGames
-            , text "/"
-            , text <| String.fromInt score.notusGames
-            , text " "
-            , if not model.isLocal then
+            , if gameState.score == Dict.empty then
                 text ""
 
               else
-                button [ onClick ResetScore ]
-                    [ text "Reset" ]
+                span []
+                    [ br
+                    , b "Games/Score for "
+                    , span [] <|
+                        List.map
+                            (\( name, oneScore ) ->
+                                span []
+                                    [ text name
+                                    , text ": "
+                                    , text <| String.fromInt oneScore.games
+                                    , text "/"
+                                    , text <| String.fromInt oneScore.score
+                                    , text " "
+                                    ]
+                            )
+                            (Dict.toList gameState.score)
+                    , if not model.isLocal then
+                        text ""
+
+                      else
+                        button [ onClick ResetScore ]
+                            [ text "Reset" ]
+                    ]
             , br
             , b "Local: "
             , input

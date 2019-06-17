@@ -1,4 +1,4 @@
----------------------------------------------------------------------
+--------------------------------------------------------------------
 --
 -- Interface.elm
 -- Zephyrnot server interface.
@@ -18,6 +18,7 @@ module Zephyrnot.Interface exposing
     )
 
 import Debug
+import Dict exposing (Dict)
 import WebSocketFramework exposing (decodePlist, unknownMessage)
 import WebSocketFramework.EncodeDecode as WFED
 import WebSocketFramework.ServerInterface as ServerInterface
@@ -289,25 +290,69 @@ messageProcessor state message =
 
                 Ok ( gameid, gameState, player ) ->
                     case placement of
-                        ChooseNew _ ->
+                        ChooseNew newPlayer ->
                             case gameState.winner of
                                 NoWinner ->
                                     errorRes message state "Game not over"
 
                                 _ ->
                                     let
+                                        players =
+                                            if player == newPlayer then
+                                                gameState.players
+
+                                            else
+                                                let
+                                                    { zephyrus, notus } =
+                                                        gameState.players
+                                                in
+                                                { zephyrus = notus
+                                                , notus = zephyrus
+                                                }
+
                                         gs =
-                                            emptyGameState gameState.players
+                                            emptyGameState players
 
                                         gs2 =
                                             { gs | score = gameState.score }
+
+                                        state2 =
+                                            if player == newPlayer then
+                                                state
+
+                                            else
+                                                let
+                                                    playerids =
+                                                        ServerInterface.getGamePlayers
+                                                            gameid
+                                                            state
+
+                                                    loop : PlayerId -> ServerState -> ServerState
+                                                    loop id st =
+                                                        let
+                                                            pl =
+                                                                if id == playerid then
+                                                                    newPlayer
+
+                                                                else
+                                                                    Types.otherPlayer
+                                                                        newPlayer
+                                                        in
+                                                        ServerInterface.updatePlayer
+                                                            id
+                                                            { gameid = gameid
+                                                            , player = pl
+                                                            }
+                                                            st
+                                                in
+                                                List.foldl loop state playerids
                                     in
-                                    ( ServerInterface.updateGame gameid gs2 state
+                                    ( ServerInterface.updateGame gameid gs2 state2
                                     , Just <|
                                         AnotherGameRsp
                                             { gameid = gameid
                                             , gameState = gs2
-                                            , player = player
+                                            , player = newPlayer
                                             }
                                     )
 
@@ -557,29 +602,40 @@ updateScore gameState =
     let
         score =
             gameState.score
+
+        names =
+            gameState.players
+
+        winnerName =
+            case gameState.winner of
+                NoWinner ->
+                    ""
+
+                ZephyrusWinner ->
+                    names.zephyrus
+
+                NotusWinner ->
+                    names.notus
     in
-    case gameState.winner of
-        NoWinner ->
-            gameState
+    if gameState.winner == NoWinner then
+        gameState
 
-        ZephyrusWinner ->
-            { gameState
-                | score =
-                    { score
-                        | zephyrusGames =
-                            score.zephyrusGames + 1
-                        , zephyrusScore =
-                            score.zephyrusScore + Board.score gameState.board
-                    }
-            }
+    else
+        let
+            oneScore =
+                case Dict.get winnerName score of
+                    Nothing ->
+                        Types.zeroOneScore
 
-        NotusWinner ->
-            { gameState
-                | score =
-                    { score
-                        | notusGames =
-                            score.notusGames + 1
-                        , notusScore =
-                            score.notusScore + Board.score gameState.board
+                    Just one ->
+                        one
+        in
+        { gameState
+            | score =
+                Dict.insert winnerName
+                    { oneScore
+                        | games = oneScore.games + 1
+                        , score = oneScore.score + Board.score gameState.board
                     }
-            }
+                    score
+        }

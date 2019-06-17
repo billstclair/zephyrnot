@@ -27,6 +27,7 @@ module Zephyrnot.EncodeDecode exposing
     )
 
 import Array exposing (Array)
+import Dict exposing (Dict)
 import Json.Decode as JD exposing (Decoder)
 import Json.Decode.Pipeline as DP exposing (optional, required)
 import Json.Encode as JE exposing (Value)
@@ -47,6 +48,7 @@ import Zephyrnot.Types as Types
         , Decoration(..)
         , GameState
         , Message(..)
+        , OneScore
         , Page(..)
         , Player(..)
         , PlayerNames
@@ -398,23 +400,32 @@ oldBoardDecoder =
             )
 
 
+encodeOneScore : OneScore -> Value
+encodeOneScore oneScore =
+    JE.object
+        [ ( "games", JE.int oneScore.games )
+        , ( "score", JE.int oneScore.score )
+        ]
+
+
+oneScoreDecoder : Decoder OneScore
+oneScoreDecoder =
+    JD.succeed OneScore
+        |> required "games" JD.int
+        |> required "score" JD.int
+
+
 encodeScore : Score -> Value
 encodeScore score =
-    JE.object
-        [ ( "zephyrusGames", JE.int score.zephyrusGames )
-        , ( "notusGames", JE.int score.notusGames )
-        , ( "zephyrusScore", JE.int score.zephyrusScore )
-        , ( "notusScore", JE.int score.notusScore )
-        ]
+    JE.dict identity encodeOneScore score
 
 
 scoreDecoder : Decoder Score
 scoreDecoder =
-    JD.succeed Score
-        |> required "zephyrusGames" JD.int
-        |> required "notusGames" JD.int
-        |> required "zephyrusScore" JD.int
-        |> required "notusScore" JD.int
+    JD.oneOf
+        [ JD.dict oneScoreDecoder
+        , JD.succeed Dict.empty
+        ]
 
 
 encodeSettings : Settings -> Value
