@@ -2096,20 +2096,42 @@ mainPage bsize model =
               else
                 span []
                     [ br
-                    , b "Games/Score for "
+                    , b "Games/Score for"
                     , span [] <|
-                        List.map
-                            (\( name, oneScore ) ->
-                                span []
-                                    [ text name
-                                    , text ": "
-                                    , text <| String.fromInt oneScore.games
-                                    , text "/"
-                                    , text <| String.fromInt oneScore.score
-                                    , text " "
+                        let
+                            yourName =
+                                playerName model.player model
+                        in
+                        List.foldl
+                            (\( name, oneScore ) html ->
+                                let
+                                    nameString =
+                                        if not model.isLocal && name == yourName then
+                                            "You (" ++ name ++ ")"
+
+                                        else
+                                            name
+                                in
+                                List.concat
+                                    [ html
+                                    , [ span []
+                                            [ if html == [] then
+                                                text " "
+
+                                              else
+                                                text ", "
+                                            , text nameString
+                                            , text ": "
+                                            , text <| String.fromInt oneScore.games
+                                            , text "/"
+                                            , text <| String.fromInt oneScore.score
+                                            ]
+                                      ]
                                     ]
                             )
+                            []
                             (Dict.toList gameState.score)
+                    , text " "
                     , if not model.isLocal then
                         text ""
 
@@ -2636,6 +2658,7 @@ auxPage bsize model =
                     , text "%"
                     ]
             ]
+        , playButton
         ]
 
 
