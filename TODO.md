@@ -1,5 +1,7 @@
 # Zephyrnot TODO
 
+1. Fix chat colors in dark mode.
+
 1. Saved open games.
     * New page has a table of open games.
     * Tap on one to resume it.

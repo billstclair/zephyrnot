@@ -571,6 +571,7 @@ incomingMessage interface message mdl =
             { model
                 | gameid = gameid
                 , playerid = playerid
+                , player = player
                 , isLive = True
                 , connectionReason = JoinGameConnection
                 , gameState = gameState
