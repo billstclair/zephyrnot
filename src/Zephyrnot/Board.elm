@@ -639,8 +639,8 @@ drawRow style delta rotated idx =
             , [ x "0"
               , y ys
               , Attributes.style <| fontStyle fsize
-              , stroke style.compassColor
-              , fill style.compassColor
+              , stroke style.lineColor
+              , fill style.lineColor
               ]
             ]
         )
@@ -749,8 +749,8 @@ drawCol style delta rotated sizer board idx =
                       , y yis
                       , Attributes.style <| fontStyle fsize
                       , textAnchor "middle"
-                      , stroke style.compassColor
-                      , fill style.compassColor
+                      , stroke style.lineColor
+                      , fill style.lineColor
                       ]
                     ]
                 )

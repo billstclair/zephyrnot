@@ -18,8 +18,6 @@
 
 1. GameState JSON text for save/restore.
 
-1. Dark mode
-
 1. [Chouette](http://www.bkgm.com/variants/Chouette-ABA.html),
    like I used to play Backgammon in college.
    * One player is "the box".
