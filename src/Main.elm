@@ -141,6 +141,7 @@ import Zephyrnot.Types as Types
         , SavedModel
         , Score
         , Settings
+        , Style
         , StyleType(..)
         , Winner(..)
         )
@@ -308,31 +309,33 @@ proxyServer =
     ServerInterface.makeProxyServer fullProcessor IncomingMessage
 
 
-updateChatAttributes : ChatSettings -> ChatSettings
-updateChatAttributes settings =
+updateChatAttributes : Style -> ChatSettings -> ChatSettings
+updateChatAttributes renderStyle settings =
     let
         attributes =
             settings.attributes
     in
-    { settings
-        | attributes =
-            { attributes
-                | chatTable =
-                    [ style "width" "90%" ]
-                , textColumn =
-                    [ style "width" "100%" ]
-                , textArea =
-                    [ style "width" "100%"
-                    , style "height" "6em"
-                    ]
-            }
-    }
+    Debug.log "chatSettings" <|
+        { settings
+            | attributes =
+                { attributes
+                    | chatTable =
+                        [ style "width" "90%" ]
+                    , textColumn =
+                        [ style "width" "100%" ]
+                    , textArea =
+                        [ style "width" "100%"
+                        , style "height" "6em"
+                        , style "border-color" renderStyle.lineColor
+                        ]
+                }
+        }
 
 
-initialChatSettings : ChatSettings
-initialChatSettings =
+initialChatSettings : Style -> ChatSettings
+initialChatSettings style =
     ElmChat.makeSettings ids.chatOutput 14 True ChatUpdate
-        |> updateChatAttributes
+        |> updateChatAttributes style
 
 
 init : Value -> url -> Key -> ( Model, Cmd Msg )
@@ -355,7 +358,7 @@ init flags url key =
                 }
             , seed = Random.initialSeed 0 --get time for this
             , error = Nothing
-            , chatSettings = initialChatSettings
+            , chatSettings = initialChatSettings (Types.typeToStyle LightStyle)
             , publicGames = []
             , time = Time.millisToPosix 0
             , requestedNew = False
@@ -431,10 +434,7 @@ storageHandler response state model =
 
         cmd =
             if mdl.started && not model.started then
-                Cmd.batch
-                    [ get pk.model
-                    , get pk.chat
-                    ]
+                get pk.model
 
             else
                 Cmd.none
@@ -455,7 +455,10 @@ storageHandler response state model =
 handleGetResponse : String -> Value -> Model -> ( Model, Cmd Msg )
 handleGetResponse key value model =
     if key == pk.chat then
-        case JD.decodeValue (ElmChat.settingsDecoder ChatUpdate) value of
+        case
+            Debug.log "decodeChat" <|
+                JD.decodeValue (ElmChat.settingsDecoder ChatUpdate) value
+        of
             Err _ ->
                 model |> withNoCmd
 
@@ -463,6 +466,7 @@ handleGetResponse key value model =
                 let
                     chatSettings =
                         updateChatAttributes
+                            (Types.typeToStyle model.styleType)
                             { settings | id = ids.chatOutput }
                 in
                 { model
@@ -471,36 +475,51 @@ handleGetResponse key value model =
                     |> withCmd (ElmChat.restoreScroll chatSettings)
 
     else if key == pk.model then
+        let
+            cmd =
+                get pk.chat
+        in
         case Debug.log "decodeSavedModel" <| ED.decodeSavedModel value of
             Err e ->
-                model |> withNoCmd
+                model |> withCmd cmd
 
             Ok savedModel ->
                 let
-                    model2 =
+                    model1 =
                         savedModelToModel savedModel model
+
+                    chatSettings =
+                        updateChatAttributes
+                            (Types.typeToStyle model1.styleType)
+                            model1.chatSettings
+
+                    model2 =
+                        { model1 | chatSettings = chatSettings }
+
+                    ( model3, cmd2 ) =
+                        if not model2.isLocal && model2.isLive && model2.playerid /= "" then
+                            model2
+                                |> webSocketConnect UpdateConnection
+
+                        else if not model2.isLocal && model2.page == PublicPage then
+                            { model2 | gameid = "" }
+                                |> webSocketConnect PublicGamesConnection
+
+                        else if model2.isLocal then
+                            { model2 | gameid = "" }
+                                |> withCmd
+                                    (send model2 <|
+                                        NewReq
+                                            { initialNewReqBody
+                                                | restoreState =
+                                                    Just model2.gameState
+                                            }
+                                    )
+
+                        else
+                            model2 |> withNoCmd
                 in
-                if not model2.isLocal && model2.isLive && model2.playerid /= "" then
-                    model2
-                        |> webSocketConnect UpdateConnection
-
-                else if not model2.isLocal && model2.page == PublicPage then
-                    { model2 | gameid = "" }
-                        |> webSocketConnect PublicGamesConnection
-
-                else if model2.isLocal then
-                    { model2 | gameid = "" }
-                        |> withCmd
-                            (send model2 <|
-                                NewReq
-                                    { initialNewReqBody
-                                        | restoreState =
-                                            Just model2.gameState
-                                    }
-                            )
-
-                else
-                    model2 |> withNoCmd
+                model3 |> withCmds [ cmd, cmd2 ]
 
     else
         model |> withNoCmd
@@ -2069,7 +2088,7 @@ mainPage bsize model =
                             , text " "
                             , button [ onClick ChatClear ]
                                 [ text "Clear" ]
-                            , ElmChat.chat model.chatSettings
+                            , ElmChat.chat <| Debug.log "view chatSettings" model.chatSettings
                             , br
                             ]
                     , b "Zephyrus: "
