@@ -309,33 +309,38 @@ proxyServer =
     ServerInterface.makeProxyServer fullProcessor IncomingMessage
 
 
-updateChatAttributes : Style -> ChatSettings -> ChatSettings
-updateChatAttributes renderStyle settings =
+updateChatAttributes : Int -> StyleType -> ChatSettings -> ChatSettings
+updateChatAttributes bsize styleType settings =
     let
+        renderStyle =
+            Types.typeToStyle styleType
+
         attributes =
             settings.attributes
     in
-    Debug.log "chatSettings" <|
-        { settings
-            | attributes =
-                { attributes
-                    | chatTable =
-                        [ style "width" "90%" ]
-                    , textColumn =
-                        [ style "width" "100%" ]
-                    , textArea =
-                        [ style "width" "100%"
-                        , style "height" "6em"
-                        , style "border-color" renderStyle.lineColor
-                        ]
-                }
-        }
+    { settings
+        | attributes =
+            { attributes
+                | chatTable =
+                    [ style "width" "fit-content"
+                    , style "max-width" "90%"
+                    , style "margin" "auto"
+                    ]
+                , textColumn =
+                    [ style "width" "fit-content"
+                    ]
+                , textArea =
+                    [ style "width" <| String.fromInt (5 * bsize // 6) ++ "px"
+                    , style "height" "6em"
+                    , style "border-color" renderStyle.lineColor
+                    ]
+            }
+    }
 
 
 initialChatSettings : Style -> ChatSettings
 initialChatSettings style =
     ElmChat.makeSettings ids.chatOutput 14 True ChatUpdate
-        |> updateChatAttributes style
 
 
 init : Value -> url -> Key -> ( Model, Cmd Msg )
@@ -456,8 +461,7 @@ handleGetResponse : String -> Value -> Model -> ( Model, Cmd Msg )
 handleGetResponse key value model =
     if key == pk.chat then
         case
-            Debug.log "decodeChat" <|
-                JD.decodeValue (ElmChat.settingsDecoder ChatUpdate) value
+            JD.decodeValue (ElmChat.settingsDecoder ChatUpdate) value
         of
             Err _ ->
                 model |> withNoCmd
@@ -465,9 +469,7 @@ handleGetResponse key value model =
             Ok settings ->
                 let
                     chatSettings =
-                        updateChatAttributes
-                            (Types.typeToStyle model.styleType)
-                            { settings | id = ids.chatOutput }
+                        { settings | id = ids.chatOutput }
                 in
                 { model
                     | chatSettings = chatSettings
@@ -485,16 +487,8 @@ handleGetResponse key value model =
 
             Ok savedModel ->
                 let
-                    model1 =
-                        savedModelToModel savedModel model
-
-                    chatSettings =
-                        updateChatAttributes
-                            (Types.typeToStyle model1.styleType)
-                            model1.chatSettings
-
                     model2 =
-                        { model1 | chatSettings = chatSettings }
+                        savedModelToModel savedModel model
 
                     ( model3, cmd2 ) =
                         if not model2.isLocal && model2.isLive && model2.playerid /= "" then
@@ -2076,6 +2070,11 @@ mainPage bsize model =
                         text ""
 
                       else
+                        let
+                            chatSettings =
+                                model.chatSettings
+                                    |> updateChatAttributes bsize model.styleType
+                        in
                         span []
                             [ ElmChat.styledInputBox [ id ids.chatInput ]
                                 []
@@ -2084,11 +2083,11 @@ mainPage bsize model =
                                 --id
                                 "Send"
                                 ChatSend
-                                model.chatSettings
+                                chatSettings
                             , text " "
                             , button [ onClick ChatClear ]
                                 [ text "Clear" ]
-                            , ElmChat.chat <| Debug.log "view chatSettings" model.chatSettings
+                            , ElmChat.chat chatSettings
                             , br
                             ]
                     , b "Zephyrus: "
