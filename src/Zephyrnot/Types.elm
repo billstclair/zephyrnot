@@ -28,14 +28,19 @@ module Zephyrnot.Types exposing
     , ServerState
     , Settings
     , Socket
+    , Style
+    , StyleType(..)
     , SubscriptionSet
     , Winner(..)
+    , darkStyle
     , emptyPrivateGameState
     , emptySettings
+    , lightStyle
     , messageToGameid
     , messageToPlayer
     , messageToPlayerid
     , otherPlayer
+    , typeToStyle
     , zeroOneScore
     , zeroScore
     )
@@ -112,6 +117,63 @@ zeroScore =
     Dict.empty
 
 
+type alias Style =
+    { backgroundColor : String
+    , lineColor : String
+    , pathColor : String
+    , alreadyFilledColor : String
+    , arrowColor : String
+    , highlightOpacity : String
+    , compassColor : String
+    , compassOpacity : String
+    }
+
+
+lightStyle : Style
+lightStyle =
+    { backgroundColor = "white"
+    , lineColor = "black"
+    , pathColor = "orange"
+    , alreadyFilledColor = "red"
+    , arrowColor = "green"
+    , highlightOpacity = "0.3"
+    , compassColor = "black"
+    , compassOpacity = "0.5"
+    }
+
+
+darkStyle : Style
+darkStyle =
+    { backgroundColor = "black"
+    , lineColor = "#BBBBBB"
+    , pathColor = "orange"
+    , alreadyFilledColor = "red"
+    , arrowColor = "green"
+    , highlightOpacity = "0.4"
+    , compassColor = "white"
+    , compassOpacity = "0.3"
+    }
+
+
+type StyleType
+    = LightStyle
+    | DarkStyle
+    | CustomStyle Style
+
+
+typeToStyle : StyleType -> Style
+typeToStyle styleType =
+    case styleType of
+        LightStyle ->
+            lightStyle
+
+        DarkStyle ->
+            darkStyle
+
+        CustomStyle style ->
+            style
+
+
 type alias Settings =
     { name : String
     , isPublic : Bool
@@ -143,6 +205,7 @@ type alias SavedModel =
     , gameid : String
     , playerid : String
     , settings : Settings
+    , styleType : StyleType
     }
 
 

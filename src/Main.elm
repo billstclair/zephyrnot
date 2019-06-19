@@ -141,8 +141,8 @@ import Zephyrnot.Types as Types
         , SavedModel
         , Score
         , Settings
+        , StyleType(..)
         , Winner(..)
-        , zeroScore
         )
 import Zephyrnot.WhichServer as WhichServer
 
@@ -210,6 +210,7 @@ type alias Model =
     , playerid : PlayerId
     , isLive : Bool
     , settings : Settings
+    , styleType : StyleType
     }
 
 
@@ -229,6 +230,7 @@ type Msg
     | SetChooseFirst Player
     | SetIsLocal Bool
     | SetNorthIsUp Bool
+    | SetDarkMode Bool
     | SetName String
     | SetIsPublic Bool
     | SetForName String
@@ -357,6 +359,7 @@ init flags url key =
             , publicGames = []
             , time = Time.millisToPosix 0
             , requestedNew = False
+            , styleType = LightStyle
 
             -- persistent fields
             , page = MainPage
@@ -518,6 +521,7 @@ modelToSavedModel model =
     , gameid = model.gameid
     , playerid = model.playerid
     , settings = model.settings
+    , styleType = model.styleType
     }
 
 
@@ -537,6 +541,7 @@ savedModelToModel savedModel model =
         , gameid = savedModel.gameid
         , playerid = savedModel.playerid
         , settings = savedModel.settings
+        , styleType = savedModel.styleType
         , interface = proxyServer
     }
 
@@ -1086,6 +1091,18 @@ updateInternal msg model =
 
         SetNorthIsUp northIsUp ->
             { model | northIsUp = northIsUp }
+                |> withNoCmd
+
+        SetDarkMode darkMode ->
+            let
+                styleType =
+                    if darkMode then
+                        DarkStyle
+
+                    else
+                        LightStyle
+            in
+            { model | styleType = styleType }
                 |> withNoCmd
 
         SetName name ->
@@ -1696,6 +1713,9 @@ view model =
 
         settings =
             model.settings
+
+        renderStyle =
+            Types.typeToStyle model.styleType
     in
     { title = "ZEPHYRNOT"
     , body =
@@ -1703,7 +1723,10 @@ view model =
             text ""
 
           else
-            div []
+            div
+                [ style "background" renderStyle.backgroundColor
+                , style "color" renderStyle.lineColor
+                ]
                 [ if settings.hideTitle then
                     text ""
 
@@ -1947,7 +1970,8 @@ mainPage bsize model =
                 )
     in
     div [ align "center" ]
-        [ Board.render bsize
+        [ Board.render (Types.typeToStyle model.styleType)
+            bsize
             Click
             (Just <| Board.getSizer DefaultSizer)
             model.decoration
@@ -2000,6 +2024,13 @@ mainPage bsize model =
                 [ type_ "checkbox"
                 , checked model.northIsUp
                 , onCheck SetNorthIsUp
+                ]
+                []
+            , b " Dark Mode: "
+            , input
+                [ type_ "checkbox"
+                , checked <| model.styleType == DarkStyle
+                , onCheck SetDarkMode
                 ]
                 []
             , br

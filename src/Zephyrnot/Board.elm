@@ -69,7 +69,6 @@ import Svg.Attributes as Attributes
         , strokeDasharray
         , strokeOpacity
         , strokeWidth
-        , style
         , textAnchor
         , transform
         , viewBox
@@ -89,6 +88,7 @@ import Zephyrnot.Types
         , Decoration(..)
         , Player(..)
         , SavedModel
+        , Style
         , Winner(..)
         )
 
@@ -407,19 +407,19 @@ lineWidth =
     lineWidthO2 * 2
 
 
-connectSizer : Int -> ( Int, String )
-connectSizer delta =
-    ( connectWidth delta, connectColor )
+connectSizer : Style -> Int -> ( Int, String )
+connectSizer style delta =
+    ( connectWidth delta, connectColor style )
 
 
-pathSizer : Int -> ( Int, String )
-pathSizer delta =
-    ( pathWidth delta, pathColor )
+pathSizer : Style -> Int -> ( Int, String )
+pathSizer style delta =
+    ( pathWidth delta, pathColor style )
 
 
 type alias Sizer =
-    { connect : Int -> ( Int, String )
-    , path : Int -> ( Int, String )
+    { connect : Style -> Int -> ( Int, String )
+    , path : Style -> Int -> ( Int, String )
     }
 
 
@@ -430,8 +430,8 @@ wideSizer =
 
 narrowSizer : Sizer
 narrowSizer =
-    { connect = \_ -> ( 2, "black" )
-    , path = \_ -> ( 2, "orange" )
+    { connect = \style _ -> ( 2, connectColor style )
+    , path = \style _ -> ( 2, pathColor style )
     }
 
 
@@ -457,7 +457,7 @@ getSizer kind =
             s
 
 
-getConnectSizer : Maybe Sizer -> (Int -> ( Int, String ))
+getConnectSizer : Maybe Sizer -> (Style -> Int -> ( Int, String ))
 getConnectSizer sizer =
     (case sizer of
         Nothing ->
@@ -469,7 +469,7 @@ getConnectSizer sizer =
         |> .connect
 
 
-getPathSizer : Maybe Sizer -> (Int -> ( Int, String ))
+getPathSizer : Maybe Sizer -> (Style -> Int -> ( Int, String ))
 getPathSizer sizer =
     (case sizer of
         Nothing ->
@@ -481,8 +481,8 @@ getPathSizer sizer =
         |> .path
 
 
-render : Int -> (( Int, Int ) -> msg) -> Maybe Sizer -> Decoration -> Maybe Player -> Bool -> List ( Int, Int ) -> Board -> Html msg
-render size tagger sizer decoration player rotated path board =
+render : Style -> Int -> (( Int, Int ) -> msg) -> Maybe Sizer -> Decoration -> Maybe Player -> Bool -> List ( Int, Int ) -> Board -> Html msg
+render style size tagger sizer decoration player rotated path board =
     let
         sizeS =
             tos size
@@ -514,26 +514,21 @@ render size tagger sizer decoration player rotated path board =
           <|
             List.concat
                 [ [ defs []
-                        [ arrowMarker ]
-                  , drawCompass delta rotated
+                        [ arrowMarker style ]
+                  , drawCompass style delta rotated
                   ]
-                , drawRows delta rotated
-                , drawCols delta rotated sizer board
-                , drawDirectionArrow delta rotated player
-                , drawPath delta rotated sizer path
-                , drawDecoration delta rotated decoration
-                , drawClickRects delta rotated tagger
+                , drawDirectionArrow style delta rotated player
+                , drawRows style delta rotated
+                , drawCols style delta rotated sizer board
+                , drawPath style delta rotated sizer path
+                , drawDecoration style delta rotated decoration
+                , drawClickRects style delta rotated tagger
                 ]
         ]
 
 
-directionArrowColor : String
-directionArrowColor =
-    "green"
-
-
-arrowMarker : Svg msg
-arrowMarker =
+arrowMarker : Style -> Svg msg
+arrowMarker style =
     marker
         [ Attributes.id "arrow"
         , viewBox "0 0 10 10"
@@ -542,16 +537,16 @@ arrowMarker =
         , markerWidth "4"
         , markerHeight "4"
         , orient "auto-start-reverse"
-        , stroke directionArrowColor
-        , fill directionArrowColor
+        , stroke style.arrowColor
+        , fill style.arrowColor
         ]
         [ path [ d "M 0 0 L 10 5 L 0 10 z" ]
             []
         ]
 
 
-drawDirectionArrow : Int -> Bool -> Maybe Player -> List (Svg msg)
-drawDirectionArrow delta rotated mplayer =
+drawDirectionArrow : Style -> Int -> Bool -> Maybe Player -> List (Svg msg)
+drawDirectionArrow style delta rotated mplayer =
     case mplayer of
         Nothing ->
             []
@@ -576,7 +571,7 @@ drawDirectionArrow delta rotated mplayer =
                 , x2 <| tos xx2
                 , y2 <| tosy delta rotated yy2
                 , strokeWidth <| tos lineWidth
-                , stroke directionArrowColor
+                , stroke style.arrowColor
                 , markerStart "url(#arrow)"
                 , markerEnd "url(#arrow)"
                 ]
@@ -584,9 +579,9 @@ drawDirectionArrow delta rotated mplayer =
             ]
 
 
-drawRows : Int -> Bool -> List (Svg msg)
-drawRows delta rotated =
-    List.map (drawRow delta rotated) [ 0, 1, 2, 3, 4, 5 ]
+drawRows : Style -> Int -> Bool -> List (Svg msg)
+drawRows style delta rotated =
+    List.map (drawRow style delta rotated) [ 0, 1, 2, 3, 4, 5 ]
         |> List.concat
 
 
@@ -597,11 +592,13 @@ fontSize delta =
 
 fontStyle : Int -> String
 fontStyle fsize =
-    "font-weight: bold; font-size: " ++ tos fsize ++ ";"
+    "font-weight: bold; font-size: "
+        ++ tos fsize
+        ++ ";"
 
 
-drawRow : Int -> Bool -> Int -> List (Svg msg)
-drawRow delta rotated idx =
+drawRow : Style -> Int -> Bool -> Int -> List (Svg msg)
+drawRow style delta rotated idx =
     let
         yc =
             delta * idx + delta // 2
@@ -618,7 +615,7 @@ drawRow delta rotated idx =
         , x2 <| tos (delta * 5 + delta // 2)
         , y2 ycs
         , strokeWidth <| tos lineWidth
-        , stroke "black"
+        , stroke style.lineColor
         ]
         []
     , let
@@ -641,7 +638,9 @@ drawRow delta rotated idx =
                 []
             , [ x "0"
               , y ys
-              , style <| fontStyle fsize
+              , Attributes.style <| fontStyle fsize
+              , stroke style.compassColor
+              , fill style.compassColor
               ]
             ]
         )
@@ -649,8 +648,8 @@ drawRow delta rotated idx =
     ]
 
 
-drawClickRects : Int -> Bool -> (( Int, Int ) -> msg) -> List (Svg msg)
-drawClickRects delta rotated tagger =
+drawClickRects : Style -> Int -> Bool -> (( Int, Int ) -> msg) -> List (Svg msg)
+drawClickRects style delta rotated tagger =
     let
         indices =
             [ 0, 1, 2, 3, 4, 5 ]
@@ -686,9 +685,9 @@ drawClickRect delta tagger rowidx colidx =
         []
 
 
-drawCols : Int -> Bool -> Maybe Sizer -> Board -> List (Svg msg)
-drawCols delta rotated sizer board =
-    List.map (drawCol delta rotated sizer board) [ 0, 1, 2, 3, 4, 5 ]
+drawCols : Style -> Int -> Bool -> Maybe Sizer -> Board -> List (Svg msg)
+drawCols style delta rotated sizer board =
+    List.map (drawCol style delta rotated sizer board) [ 0, 1, 2, 3, 4, 5 ]
         |> List.concat
 
 
@@ -703,8 +702,8 @@ tosy delta rotated y =
             y
 
 
-drawCol : Int -> Bool -> Maybe Sizer -> Board -> Int -> List (Svg msg)
-drawCol delta rotated sizer board idx =
+drawCol : Style -> Int -> Bool -> Maybe Sizer -> Board -> Int -> List (Svg msg)
+drawCol style delta rotated sizer board idx =
     let
         xc =
             delta * idx + delta // 2
@@ -729,7 +728,7 @@ drawCol delta rotated sizer board idx =
                 , x2 xcs
                 , y2 <| tosy delta rotated (delta * 5 + delta // 2)
                 , strokeWidth <| tos lineWidth
-                , stroke "black"
+                , stroke style.lineColor
                 ]
                 []
           , let
@@ -748,14 +747,16 @@ drawCol delta rotated sizer board idx =
                         []
                     , [ x xis
                       , y yis
-                      , style <| fontStyle fsize
+                      , Attributes.style <| fontStyle fsize
                       , textAnchor "middle"
+                      , stroke style.compassColor
+                      , fill style.compassColor
                       ]
                     ]
                 )
                 [ Svg.text <| colToString idx ]
           ]
-        , List.map (drawVertex delta rotated sizer idx board) [ 0, 1, 2, 3, 4, 5 ]
+        , List.map (drawVertex style delta rotated sizer idx board) [ 0, 1, 2, 3, 4, 5 ]
             |> List.concat
         ]
 
@@ -779,15 +780,14 @@ pathWidth delta =
     connectWidth delta - 4
 
 
-connectColor : String
-connectColor =
-    --"white"
-    "black"
+connectColor : Style -> String
+connectColor style =
+    style.lineColor
 
 
-pathColor : String
-pathColor =
-    "white"
+pathColor : Style -> String
+pathColor style =
+    style.pathColor
 
 
 centers : Int -> Int -> Int -> ( Int, Int )
@@ -795,8 +795,8 @@ centers delta rowidx colidx =
     ( delta * colidx + delta // 2, delta * rowidx + delta // 2 )
 
 
-drawVertex : Int -> Bool -> Maybe Sizer -> Int -> Board -> Int -> List (Svg msg)
-drawVertex delta rotated sizer colidx board rowidx =
+drawVertex : Style -> Int -> Bool -> Maybe Sizer -> Int -> Board -> Int -> List (Svg msg)
+drawVertex style delta rotated sizer colidx board rowidx =
     let
         ( xc, yc ) =
             centers delta rowidx colidx
@@ -809,13 +809,13 @@ drawVertex delta rotated sizer colidx board rowidx =
             , cy <| tosy delta rotated yc
             , r <| tos (delta // 6)
             , strokeWidth <| tos lineWidthO2
-            , stroke "black"
+            , stroke style.lineColor
             , fill
                 (if setp then
-                    "black"
+                    style.lineColor
 
                  else
-                    "white"
+                    style.backgroundColor
                 )
             ]
             []
@@ -824,19 +824,19 @@ drawVertex delta rotated sizer colidx board rowidx =
         []
 
       else
-        drawConnections delta rotated rowidx colidx (getConnectSizer sizer) board
+        drawConnections style delta rotated rowidx colidx (getConnectSizer sizer) board
     ]
         |> List.concat
 
 
-drawConnections : Int -> Bool -> Int -> Int -> (Int -> ( Int, String )) -> Board -> List (Svg msg)
-drawConnections delta rotated rowidx colidx sizer board =
+drawConnections : Style -> Int -> Bool -> Int -> Int -> (Style -> Int -> ( Int, String )) -> Board -> List (Svg msg)
+drawConnections style delta rotated rowidx colidx sizer board =
     let
         ( xc, yc ) =
             centers delta rowidx colidx
 
         ( lw, color ) =
-            sizer delta
+            sizer style delta
 
         leftp =
             get rowidx (colidx - 1) board
@@ -891,7 +891,8 @@ drawConnections delta rotated rowidx colidx sizer board =
             , y <| tosy delta rotated (yc - lw // 2)
             , width <| tos (right - left)
             , height <| tos lw
-            , strokeWidth "0"
+            , strokeWidth "1"
+            , stroke color
             , fill color
             , rx <| tos xyr
             ]
@@ -921,7 +922,8 @@ drawConnections delta rotated rowidx colidx sizer board =
             , y <| tosy delta rotated top
             , width <| tos lw
             , height <| tos (bottom - top)
-            , strokeWidth "0"
+            , strokeWidth "1"
+            , stroke color
             , fill color
             , ry <| tos xyr
             ]
@@ -931,8 +933,8 @@ drawConnections delta rotated rowidx colidx sizer board =
         |> List.concat
 
 
-drawDecoration : Int -> Bool -> Decoration -> List (Svg msg)
-drawDecoration delta rotated decoration =
+drawDecoration : Style -> Int -> Bool -> Decoration -> List (Svg msg)
+drawDecoration style delta rotated decoration =
     case decoration of
         NoDecoration ->
             []
@@ -945,7 +947,8 @@ drawDecoration delta rotated decoration =
                 , height <| tos (delta // 3 + 2)
                 , rx <| tos (delta // 6 + 1)
                 , strokeWidth "0"
-                , fillOpacity "0.3"
+                , fill style.lineColor
+                , fillOpacity style.highlightOpacity
                 ]
                 []
             ]
@@ -958,7 +961,8 @@ drawDecoration delta rotated decoration =
                 , width <| tos (delta // 3 + 2)
                 , ry <| tos (delta // 6 + 1)
                 , strokeWidth "0"
-                , fillOpacity "0.3"
+                , fill style.lineColor
+                , fillOpacity style.highlightOpacity
                 ]
                 []
             ]
@@ -973,14 +977,14 @@ drawDecoration delta rotated decoration =
                 , cy <| tosy delta rotated yc
                 , r <| tos (delta // 4)
                 , strokeWidth "0"
-                , fill "red"
+                , fill style.alreadyFilledColor
                 ]
                 []
             ]
 
 
-drawPath : Int -> Bool -> Maybe Sizer -> List ( Int, Int ) -> List (Svg msg)
-drawPath delta rotated sizer path =
+drawPath : Style -> Int -> Bool -> Maybe Sizer -> List ( Int, Int ) -> List (Svg msg)
+drawPath style delta rotated sizer path =
     let
         board =
             List.foldl (\( r, c ) b -> set r c b) empty path
@@ -988,7 +992,7 @@ drawPath delta rotated sizer path =
         psizer =
             getPathSizer sizer
     in
-    List.map (\( r, c ) -> drawConnections delta rotated r c psizer board) path
+    List.map (\( r, c ) -> drawConnections style delta rotated r c psizer board) path
         |> List.concat
 
 
@@ -1019,8 +1023,8 @@ rowToString x =
     tos <| 6 - x
 
 
-drawCompass : Int -> Bool -> Svg msg
-drawCompass delta rotated =
+drawCompass : Style -> Int -> Bool -> Svg msg
+drawCompass style delta rotated =
     let
         c =
             3 * delta
@@ -1096,6 +1100,8 @@ drawCompass delta rotated =
                             ++ ("0," ++ tos longR ++ " ")
                             ++ (connection ++ " ")
                             ++ "0,0"
+                    , fill style.lineColor
+                    , stroke style.lineColor
                     ]
                     []
                 , Svg.polygon
@@ -1105,6 +1111,8 @@ drawCompass delta rotated =
                             -- Should really compute "1" here
                             ++ (tos (shortX + shorterX) ++ "," ++ tos shortX ++ " ")
                             ++ connection
+                    , fill style.compassColor
+                    , stroke style.compassColor
                     ]
                     []
                 , g
@@ -1122,8 +1130,8 @@ drawCompass delta rotated =
                                         ++ arcEnd
                                    )
                         , strokeWidth <| tos thickness
-                        , stroke "black"
-                        , fill "none"
+                        , stroke style.compassColor
+                        , fill style.backgroundColor
                         ]
                         []
                     ]
@@ -1133,8 +1141,10 @@ drawCompass delta rotated =
             Svg.text_
                 [ x <| tos cx
                 , y <| tos cy
-                , style <| fontStyle fsize
+                , Attributes.style <| fontStyle fsize
                 , textAnchor "middle"
+                , stroke style.compassColor
+                , fill style.compassColor
                 ]
                 [ Svg.text txt ]
     in
@@ -1145,8 +1155,8 @@ drawCompass delta rotated =
                 ++ " "
                 ++ csy
                 ++ ")"
-        , fillOpacity "0.5"
-        , strokeOpacity "0.5"
+        , fillOpacity style.compassOpacity
+        , strokeOpacity style.compassOpacity
         ]
         [ quarterImage
         , g [ transform "rotate(90)" ] [ quarterImage ]

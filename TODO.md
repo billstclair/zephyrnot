@@ -10,11 +10,9 @@
     * zephyrnot.com?gameid={gameid}
     * zephyrnot.com?gamestate={gamestate in json}
     
-1. Rotate option so you're playing in the direction you like.
+1. Send email/text with game invite.
 
 1. In Safari 12.1 on Mac, getting one-pixel line in center of orange highlights.
-
-1. "New game" should switch roles.
 
 1. Sounds, shakes.
 
@@ -41,4 +39,3 @@
 1. Placement mode checkbox
    * One click to select a node.
    * Used to make sample layouts.
-

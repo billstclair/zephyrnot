@@ -59,6 +59,7 @@ import Zephyrnot.Types as Types
         , Score
         , Settings
         , Socket
+        , StyleType(..)
         , Winner(..)
         )
 
@@ -81,6 +82,33 @@ movesDecoder =
         ]
 
 
+encodeStyleType : StyleType -> Value
+encodeStyleType styleType =
+    case styleType of
+        DarkStyle ->
+            JE.string "DarkStyle"
+
+        _ ->
+            JE.string "LightStyle"
+
+
+styleTypeDecoder : Decoder StyleType
+styleTypeDecoder =
+    JD.string
+        |> JD.andThen
+            (\s ->
+                case s of
+                    "LightStyle" ->
+                        JD.succeed LightStyle
+
+                    "DarkStyle" ->
+                        JD.succeed DarkStyle
+
+                    _ ->
+                        JD.fail "Unknown StyleType name."
+            )
+
+
 encodeSavedModel : SavedModel -> Value
 encodeSavedModel model =
     JE.object
@@ -97,6 +125,7 @@ encodeSavedModel model =
         , ( "gameid", JE.string model.gameid )
         , ( "playerid", JE.string model.playerid )
         , ( "settings", encodeSettings model.settings )
+        , ( "styleType", encodeStyleType model.styleType )
         ]
 
 
@@ -121,6 +150,7 @@ savedModelDecoder =
         |> optional "gameid" JD.string ""
         |> optional "playerid" JD.string ""
         |> optional "settings" settingsDecoder Types.emptySettings
+        |> optional "styleType" styleTypeDecoder LightStyle
 
 
 encodePage : Page -> Value
