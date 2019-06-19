@@ -1726,6 +1726,7 @@ view model =
             div
                 [ style "background" renderStyle.backgroundColor
                 , style "color" renderStyle.lineColor
+                , style "padding" "5px"
                 ]
                 [ if settings.hideTitle then
                     text ""
