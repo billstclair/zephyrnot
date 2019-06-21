@@ -146,7 +146,7 @@ darkStyle : Style
 darkStyle =
     { backgroundColor = "black"
     , lineColor = "#BBBBBB"
-    , pathColor = "orange"
+    , pathColor = "purple"
     , alreadyFilledColor = "red"
     , arrowColor = "green"
     , highlightOpacity = "0.4"
