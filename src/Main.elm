@@ -1891,7 +1891,7 @@ mainPage bsize model =
                             NoDecoration ->
                                 case model.decoration of
                                     NoDecoration ->
-                                        if model.player == Zephyrus then
+                                        if currentPlayer == Just Zephyrus then
                                             zephyrus ++ ", pick a " ++ colname
 
                                         else
