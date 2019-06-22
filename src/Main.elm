@@ -2337,6 +2337,12 @@ mainPage bsize model =
                 , target "_blank"
                 ]
                 [ text "GitHub" ]
+            , text " "
+            , a
+                [ href "https://gibgoygames.com/"
+                , target "_blank"
+                ]
+                [ text "Gib Goy Games" ]
             , br
             , button
                 [ onClick ClearStorage ]
