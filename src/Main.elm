@@ -2343,8 +2343,9 @@ mainPage bsize model =
                 , target "_blank"
                 ]
                 [ text "Gib Goy Games" ]
-            , br
-            , button
+            ]
+        , p []
+            [ button
                 [ onClick ClearStorage ]
                 [ text <| "Clear" ]
             ]
